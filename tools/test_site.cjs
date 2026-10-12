@@ -36,7 +36,8 @@ ok("加载全部脚本无异常", true);
 const X2 = window.X2 || {};
 ok("数据：章节 10 章", (X2.chapters || []).length === 10, "得到 " + (X2.chapters || []).length);
 ok("数据：任务 166 条", (X2.quests || []).length === 166, "得到 " + (X2.quests || []).length);
-ok("数据：系统 8 篇", (X2.systems || []).length === 8, "得到 " + (X2.systems || []).length);
+ok("数据：系统 10 篇", (X2.systems || []).length === 10, "得到 " + (X2.systems || []).length);
+ok("数据：DLC 任务已标记", (X2.quests || []).filter((q) => q.dlc).length === 7, "得到 " + (X2.quests || []).filter((q) => q.dlc).length);
 ok("数据：原刊 68 页", (X2.mag || []).length === 68, "得到 " + (X2.mag || []).length);
 ok("数据：图鉴分类", Object.keys(X2.codex || {}).length === 6, Object.keys(X2.codex || {}).join(","));
 

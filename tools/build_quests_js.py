@@ -164,7 +164,121 @@ TIPS = {
     "遭受袭击的诺彭商人": ["第二章前往托里格镇时解锁。"],
     "鲜艳的水果馅饼": ["第二章完成「尼娅的情报收集」后解锁。"],
     "托里格的起重机破坏事件": ["第二章完成「尼娅的情报收集」后解锁。"],
+
+    # ---- DLC（Expansion Pass）追加任务 ----
+    "全新的力量": ["<b>DLC 限定</b>，需要购买季票（Expansion Pass），在主菜单 Expansion 一栏解锁任务。主线到达第 5 章之后，且梅勒芙、尼娅、虎都在队伍中才会触发；前往古拉・托里格镇虎的家接取。",
+                "这个任务难度不大，但要求相当充足的<b>普通异刃</b>储备：需要 8 种特定外形/武器组合的普通异刃（稀有异刃无效），并用指定必杀技打倒敌人。因为战斗中积累的必杀技等级不会继承到下一场，需要尽量挑等级高、血厚的敌人（否则必杀技还没攒到指定阶段敌人就被打倒了）；如果此时全员已 Lv99，建议挑 60 级以上的高级稀有冠名怪，或某些地图的 90 级以上普通怪。",
+                "就算普通异刃的武器种类相同，外形特征不同时必杀技也可能不同，所以要事先在异刃资料界面确认该异刃是否拥有任务所需的必杀技。",
+                "三个阶段要求的必杀技：①女性型/以太巨炮/光束爆发（3 级）、男性型/拳套/猛冲突击（2 级）；②犬型/双环刃/双重獠牙（2 级）、男性型/斧/回旋战斧（3 级）、女性型/锤/浮空盾（1 级）；③女性型/弹击球/闪光轰炸（1 级）、男性型（魁梧型）/枪/光束战戟（2 级）、男性型/刀/多重突击（3 级）。",
+                "收集完战斗数据后前往斯佩比亚・废弃工厂的巴尔吉港发生剧情；再到英维迪亚・塞斯罗亚水田的黄樟树下找到宝箱（需要地属性之力 Lv1、观察眼 Lv1），可获得「十分不正经的书」；之后前往巴尔吉港，最后到斯佩比亚帝国上层・杰利德恩高地打倒 BOSS 机枪蜘蛛（Lv33），返回巴尔吉港即可完成。",
+                "报酬：6100 G、EXP 6160、SP 300，奖励道具马达晶片 ×3、黄金诺彭面具 ×1、物理防御提升 ×1。",
+                "完成后花巴斯塔可以在不使用超频的情况下任意绑定给任何角色，是本作中除了 KOS-MOS Re 之外第二个光属性异刃，使用价值很高。",
+                "如果恰好缺某一种普通异刃，不必拼脸硬抽 —— 先推主线，等身上的普通异刃自然积累充足了再回来做。"],
+    "铁匠的爱好": ["<b>DLC 限定</b>。主线到达第 3 章后，在弗雷斯贝古村中央・出发市场与 NPC 希尔维奥对话接取。",
+                "流程：①在古拉打捞获得丛林框架；②在英维迪亚获得黑葡萄石；③在英维迪亚打倒利普狼兽获得狼兽的牙（利普狼兽可在大胸骨拱门附近寻找）；④把材料交给希尔维奥完成任务。完成后可以在希尔维奥处制作各种饰品。"],
+    "名流帽": ["<b>DLC 限定</b>。主线到达第 5 章后，在英维迪亚・冯斯麦姆港与 NPC 本尼迪克对话接取。",
+             "流程：①到阿伐利缇亚商会靠北的位置找到露洁娜，需要「女孩谈话 Lv6」才能交流；②去附近帽子店找哈特特咨询（或把异刃「鸣」带在身上再对话，所需材料/技能会有不同）；③再和露洁娜对话获得她想要的帽子款式；④回去找哈特特得知材料：树叶光斑纹样的窗帘 ×3（古拉・托里格镇・格罗德居住区的涅罗米尼纺织品店购买）、枫叶碎石 ×6（斯佩比亚上层・死去劳动者之桥最深处的艾尔格利亚旧街区采集）、水晶山茶花 ×6（英维迪亚・赛斯罗亚水田采集）、彩虹冰糕 ×3（冯斯麦姆商业区的斯佩兰采甜品店购买）；⑤把材料交给哈特特得到时尚的帽子，再把帽子交给露洁娜完成任务。",
+             "完成后还能获得可以使用「鸣」的机械纺织技能所制作的纺织品配方。"],
+    "制作迷恋药": ["<b>DLC 限定</b>。主线到达第 7 章、且花 JK 在队伍中时，在阿伐利缇亚的旅店住宿后发生剧情接取。这是最值得做的 DLC 任务之一。",
+               "流程：①前往洛修利亚・封闭矿石场获得<b>心跳蓟</b>——先传送到洛修利亚上层的渴望眼界，一路来到卢米娜利亚台柱，调查上层的冰柱，用场景技能筑起冰桥来到乌尔迦利亚正门，继续往上来到崩城的旧支柱都市，利用冰冻的滑道飞跃至封闭矿石场；②返回阿伐利缇亚商会上层，传送到格尔特蒙特飞行甲板，前往附近的格尔特蒙特居住区，调查「最强火力」篝火即可制作迷恋药。",
+               "制作材料：心跳蓟 + 羽衣桃 ×2（弥先海域采集）+ 绚丽南瓜 ×2（古拉・托里格镇附近采集）+ 幸运锦兰 ×1（古拉・托里格镇附近采集）+ 迷情蜜瓜 ×1（阿伐利缇亚商会飞行甲板采集）。",
+               "完成后只要凑齐材料就能在这里<b>重复制作迷恋药</b>（1 瓶 +3000 好感度），让提升异刃信赖度这件事轻松很多。"],
+    "佣兵的规矩": ["<b>DLC 限定</b>。需要主线到达终章，并且完成 DLC 任务第二弹中的「繁星之夜」后才能触发。在英维迪亚王都冯斯麦姆的亲卫军兵舍前发生剧情接取，敌人较强，推荐全队平均 Lv60 以上。",
+               "流程：①在檀佩兰提亚・圣杯之铁锤附近寻找佣兵的线索，调查目的地的脚印（需要观察眼 Lv6、集中力 Lv8）；②沿红色脚印来到被称为「灭之斩击」的地方，调查坟墓（需要观察眼 Lv7、忍耐力 Lv7）；③继续沿脚印前进，击败以戈弗雷多为首的 3 个御刃者并发生剧情；④前往战场平原打倒 BOSS 狂血的跟踪魔，回去找戈弗雷多对话；⑤回英维迪亚亲卫军兵舍与莫德斯托对话完成任务。",
+               "完成后，佣兵团任务中会追加报酬额与提升信赖度较多的新任务。"],
+    "梅尔可利贝的强敌": ["<b>DLC 限定</b>。需要主线到达终章，且八重切、雷鼓、天威三个异刃都在队伍中才会触发（雷鼓的雷电控制需 Lv5、天威的失控需 Lv5 才能顺利对话），出现敌人相当强力，推荐全队平均 Lv90 以上。在利贝拉里塔斯・里吉特港与卡瑟姆对话接取。",
+                  "流程：①前往梅尔可利贝小岛（就在巴尔德塔斯岛右侧，直接跳下云海游过去即可），在岛上打倒 BOSS 海之恶德（Lv81），剧情后回到里吉特港；②再次来到梅尔可利贝小岛，这次要同时面对三个 BOSS：陆之渴望（Lv84）、空之怠倦（Lv78）、海之恶德（Lv81），建议优先击破等级最低的空之怠倦。<b>即使团灭，已经击杀的 BOSS 也不会复生</b>，强度不够可以靠车轮战一只只击杀；③回去和卡瑟姆对话完成任务。",
+                  "完成后，佣兵团任务中会追加报酬额与提升信赖度较多的新任务。"],
+    "繁星之夜": ["DLC 任务第二弹中的一环，是「佣兵的规矩」的前置。"],
 }
+
+def build_quest(name, title, body, pr=None, cat="普通任务", extra=None):
+    """把一条任务的 wikitext 与 SMW 数据装配成任务对象。"""
+    pr = pr or {}
+
+    def first(k, d=""):
+        v = pr.get(k) or []
+        if not v:
+            return d
+        x = v[0]
+        return x.get("fulltext", d).split(":", 1)[-1] if isinstance(x, dict) else x
+
+    flow, prose = parse_quest_body(body)
+    m = re.search(r"\|\s*物品\s*=\s*(.*)", body)
+    rewards = []
+    if m:
+        for it in re.findall(r"ItemQuestRewardRow\|([^}|]*)", m.group(1)):
+            it = it.strip()
+            if it:
+                rewards.append(it)
+    qid = re.sub(r"[{}\s]", "", first("任务ID"))
+    if not re.fullmatch(r"[A-Za-z]{1,3}-?\d{1,3}", qid):
+        qid = ""
+    q = {
+        "id": qid or name,
+        "name": name,
+        "cat": first("任务分类") or cat,
+        "place": [x for x in [first("地点1"), first("地点2")] if x],
+        "npc": first("NPC"),
+        "cond": clean_wikitext(first("任务条件")),
+        "blade": first("对应异刃"),
+        "gold": first("金币"),
+        "exp": first("EXP"),
+        "sp": first("SP"),
+        "devRegion": first("发展度地区"),
+        "dev": first("发展度增加"),
+        "trust": first("信赖度"),
+        "flow": flow,
+        "notes": prose,
+        "rewards": rewards,
+        "url": wiki_url(title),
+        "src": ["wiki"],
+    }
+    if extra:
+        q.update(extra)
+    if name in TIPS:
+        q["tips"] = TIPS[name]
+        src = ["wiki"]
+        if extra and extra.get("dlc"):
+            src.append("《攻略特辑》DLC 补完计划")
+        else:
+            src.append("攻略备注")
+        q["src"] = src
+    return q
+
+
+def fetch_wiki_pages(titles, cache_path):
+    """从 wiki 抓页面 wikitext（带本地缓存），用于 DLC 任务等不在 SMW 清单里的条目。"""
+    cache = {}
+    if os.path.exists(cache_path):
+        try:
+            cache = json.load(open(cache_path, encoding="utf-8"))
+        except Exception:
+            cache = {}
+    missing = [t for t in titles if t not in cache or not cache[t]]
+    if missing:
+        try:
+            import urllib.parse, urllib.request
+            for i in range(0, len(missing), 20):
+                batch = missing[i:i + 20]
+                url = "https://xenoblade2.cn/api.php?" + urllib.parse.urlencode({
+                    "action": "query", "prop": "revisions", "rvprop": "content", "rvslots": "main",
+                    "titles": "|".join(batch), "format": "json", "formatversion": "2"})
+                req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (guide builder)"})
+                with urllib.request.urlopen(req, timeout=120) as r:
+                    d = json.load(r)
+                for pg in d.get("query", {}).get("pages", []):
+                    if "revisions" in pg:
+                        cache[pg["title"]] = pg["revisions"][0]["slots"]["main"]["content"]
+            json.dump(cache, open(cache_path, "w", encoding="utf-8"), ensure_ascii=False)
+        except Exception as e:
+            print("  警告：抓取 wiki 页面失败（将只用已有缓存）:", e)
+    return cache
+
+
+# DLC（Expansion Pass）追加任务：不在 SMW 的「任务」查询结果里，单独抓取
+DLC_QUESTS = ["全新的力量", "铁匠的爱好", "名流帽", "制作迷恋药", "佣兵的规矩", "梅尔可利贝的强敌", "繁星之夜"]
+
 
 def main():
     smw = json.load(open(os.path.join(W, "smw_all_quests.json"), encoding="utf-8"))
@@ -184,55 +298,39 @@ def main():
 
     quests = []
     for title, rec in results.items():
-        pr = rec.get("printouts", {})
         name = title.split(":", 1)[1] if ":" in title else title
+        quests.append(build_quest(name, title, content.get(title, ""), rec.get("printouts", {})))
 
-        def first(k, d=""):
-            v = pr.get(k) or []
-            if not v:
-                return d
-            x = v[0]
-            return x.get("fulltext", d).split(":", 1)[-1] if isinstance(x, dict) else x
+    # DLC 任务：SMW 清单里已包含它们（带 任务分类），这里补上 DLC 标记与攻略备注
+    dlc_cache = fetch_wiki_pages(["任务:" + n for n in DLC_QUESTS],
+                                os.path.join(W, "content_dlc_quests.json"))
+    by_name = {q["name"]: q for q in quests}
+    added = 0
+    for n in DLC_QUESTS:
+        title = "任务:" + n
+        body = dlc_cache.get(title) or content.get(title, "")
+        q = by_name.get(n)
+        if q is None:
+            if not body:
+                continue
+            pr = (results.get(title) or {}).get("printouts", {})
+            q = build_quest(n, title, body, pr, cat="DLC任务")
+            quests.append(q)
+            added += 1
+        else:
+            # 补全流程（部分 DLC 任务页面 SMW 有记录但正文没抓到）
+            if not q["flow"] and body:
+                f2, p2 = parse_quest_body(body)
+                q["flow"] = f2
+                q["notes"] = q["notes"] or p2
+        q["dlc"] = True
+        q["cat"] = "DLC任务"
+        q["src"] = ["wiki", "《攻略特辑》DLC 补完计划"]
+        if n in TIPS:
+            q["tips"] = TIPS[n]
+    print("DLC 任务：新增", added, "| 标记", sum(1 for x in quests if x.get("dlc")))
 
-        body = content.get(title, "")
-        flow, prose = parse_quest_body(body)
-        m = re.search(r"\|\s*物品\s*=\s*(.*)", body)
-        rewards = []
-        if m:
-            for it in re.findall(r"ItemQuestRewardRow\|([^}|]*)", m.group(1)):
-                it = it.strip()
-                if it:
-                    rewards.append(it)
-        qid = first("任务ID") or ""
-        qid = re.sub(r"[{}\s]", "", qid)
-        if not re.fullmatch(r"[A-Za-z]{1,3}-?\d{1,3}", qid):
-            qid = ""
-        q = {
-            "id": qid or name,
-            "name": name,
-            "cat": first("任务分类") or "普通任务",
-            "place": [x for x in [first("地点1"), first("地点2")] if x],
-            "npc": first("NPC"),
-            "cond": clean_wikitext(first("任务条件")),
-            "blade": first("对应异刃"),
-            "gold": first("金币"),
-            "exp": first("EXP"),
-            "sp": first("SP"),
-            "devRegion": first("发展度地区"),
-            "dev": first("发展度增加"),
-            "trust": first("信赖度"),
-            "flow": flow,
-            "notes": prose,
-            "rewards": rewards,
-            "url": wiki_url(title),
-            "src": ["wiki"],
-        }
-        if name in TIPS:
-            q["tips"] = TIPS[name]
-            q["src"] = ["wiki", "攻略备注"]
-        quests.append(q)
-
-    order = {"主线任务": 0, "普通任务": 1, "异刃任务": 2}
+    order = {"主线任务": 0, "普通任务": 1, "异刃任务": 2, "DLC任务": 3}
     quests.sort(key=lambda q: (order.get(q["cat"], 9), q["id"]))
     js = "window.X2=window.X2||{};window.X2.quests=" + json.dumps(quests, ensure_ascii=False, separators=(",", ":")) + ";\n"
     with open(os.path.join(OUT, "quests.js"), "w", encoding="utf-8") as f:

@@ -113,7 +113,8 @@
     var h = [];
     h.push('<h2>' + esc(q.name) + "</h2>");
     var sub = [];
-    if (q.cat) sub.push('<span class="tag ' + (q.cat === "异刃任务" ? "blue" : q.cat === "主线任务" ? "red" : "grey") + '">' + esc(q.cat) + "</span>");
+    if (q.cat) sub.push('<span class="tag ' + (q.cat === "异刃任务" ? "blue" : q.cat === "主线任务" ? "red" : q.cat === "DLC任务" ? "gold" : "grey") + '">' + esc(q.cat) + "</span>");
+    if (q.dlc) sub.push('<span class="tag gold">DLC 限定</span>');
     if (q.id) sub.push('<span class="tag mono">' + esc(q.id) + "</span>");
     if (q.src && q.src.length) sub.push('<span class="srcbadge">来源：' + esc(q.src.join(" / ")) + "</span>");
     h.push('<div class="m-sub">' + sub.join(" ") + "</div>");
@@ -313,7 +314,7 @@
   var questFilter = { cat: "全部", key: "" };
   function viewQuests(params) {
     if (params && params.q) questFilter.key = params.q;
-    var cats = ["全部", "主线任务", "普通任务", "异刃任务"];
+    var cats = ["全部", "主线任务", "普通任务", "异刃任务", "DLC任务"];
     var list = (X2.quests || []).filter(function (q) {
       if (questFilter.cat !== "全部" && q.cat !== questFilter.cat) return false;
       if (questFilter.key) {
