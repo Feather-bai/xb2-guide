@@ -59,27 +59,30 @@ python -m http.server 8899
 
 ## 重新生成数据
 
-构建脚本在 `tools/`，依赖 Python 3 与 PyMuPDF（用于渲染 PDF 原页）。
+构建脚本在 `tools/`，依赖 Python 3 与 PyMuPDF（用于渲染 PDF 原页；仅在需要重新渲染原刊图片时用到）。
+
+按顺序执行即可从原始素材重建 `site/data/` 下的全部数据（脚本会复用 `.extract/` 里的 OCR 与 wiki 缓存，缺失时自动重新抓取）：
 
 ```bash
-python tools/extract_doc.py        # 解析 .doc 备注
-python tools/ocr_all.py all        # 渲染 PDF 页面并 OCR
-python tools/export_mag_images.py  # 导出原刊 WebP
-python tools/build_chapters.py     # 生成 chapters.js
-python tools/build_systems.py      # 生成 systems.js
-python tools/build_quests_js.py    # 生成 quests.js
-python tools/build_codex.py        # 生成 codex.js
-python tools/build_extras.py       # 生成 extras.js
-python tools/build_mag.py          # 生成 mag.js
-python tools/build_index.py        # 生成 index.js
-python tools/link_quests.py        # 把正文里的任务名标注成可点击链接
+python tools/extract_doc.py         # 解析 .doc 每章备注
+python tools/ocr_all.py all         # 渲染 PDF 页面并 OCR（首次约 20 分钟）
+python tools/export_mag_images.py   # 导出原刊 68 页 WebP
+python tools/build_quests_js.py     # quests.js（166 条任务，含 7 条 DLC 任务）
+python tools/build_chapters.py      # chapters.js（10 章主线流程）
+python tools/build_systems.py       # systems.js（10 篇系统与养成）
+python tools/build_codex.py         # codex.js（异刃 / 辅助核心 / 饰品 / 地标 / 珍稀种）
+python tools/build_extras.py        # extras.js（差异对照 + 地图与收集）
+python tools/build_mag.py           # mag.js（原刊 68 页索引与 OCR 文本）
+python tools/build_index.py         # index.js（模块清单 + 可链接名词索引）
+python tools/build_chapter_images.py # 把原刊配图挂到对应章节
+python tools/link_quests.py         # 把正文里的任务名标注成可点击的浮窗链接
 ```
 
 测试：
 
 ```bash
-node tools/test_site.cjs   # jsdom 冒烟测试（路由 / 浮窗 / 搜索 / 图鉴 / 图片）
-node tools/check_links.cjs # 站内链接与资源引用检查
+node tools/test_site.cjs    # 32 项 jsdom 冒烟测试（路由 / 浮窗 / 搜索 / 图鉴 / 图片 / DLC 标记）
+node tools/check_links.cjs  # 站内链接、任务链接与资源引用检查
 ```
 
 ## 部署
