@@ -1,0 +1,3 @@
+name = "xb2-guide"
+compatibility_date = "2025-01-01"
+pages_build_output_dir = "site"

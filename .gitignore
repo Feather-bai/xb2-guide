@@ -1,4 +1,4 @@
-# 构建产物 / 中间素材（不入库）
+# build artifacts / intermediate material (not committed)
 .extract/
 .pylibs/
 .piptmp/
@@ -9,6 +9,6 @@
 .deploy/
 .piqrtmp/
 
-# Python
+# python
 __pycache__/
 *.pyc

@@ -13,14 +13,33 @@ def wiki_url(title):
     return WIKI + urllib.parse.quote(title.replace(" ", "_"))
 
 
+def strip_templates(s):
+    """先处理常用模板为可读文本，再逐层剥离剩余模板。"""
+    s = re.sub(r"\{\{任务流程折叠\|([^|{}]*)\|([^|{}]*)\|[^{}]*\}\}", r"\1（\2）", s)
+    s = re.sub(r"\{\{ItemQuestRewardRow\|([^}|{}]*)[^{}]*\}\}", r"\1", s)
+    s = re.sub(r"\{\{PAGENAME\}\}", "", s)
+    s = re.sub(r"\{\{FULLPAGENAME\}\}", "", s)
+    # 逐层剥离：把 {{...}} 换成其第一个参数（若有），否则删掉
+    for _ in range(8):
+        new = re.sub(r"\{\{([^{}]*)\}\}", lambda m: (m.group(1).split("|")[-1].strip()
+                                                     if "|" in m.group(1) else ""), s)
+        if new == s:
+            break
+        s = new
+    s = re.sub(r"\{\{[^{}]*$", "", s)   # 收尾的未闭合模板
+    s = re.sub(r"\[\[[^\[\]]*$", "", s)
+    s = s.replace("{{", "").replace("}}", "")
+    s = re.sub(r"\{\|.*?\|\}", "", s, flags=re.S)  # 表格语法残留
+    return s
+
+
 def clean_wikitext(s):
     if not s:
         return ""
+    s = re.sub(r"\[\[(?:文件|File|Image):[^\[\]]*(\]\]|$)", "", s, flags=re.I)  # 图片
+    s = strip_templates(s)
     s = re.sub(r"<br\s*/?>", "\n", s)
     s = re.sub(r"<[^>]+>", "", s)
-    s = re.sub(r"\{\{任务流程折叠\|([^|}]*)\|([^|}]*)\|[^}]*\}\}", r"\1（\2）", s)
-    s = re.sub(r"\{\{ItemQuestRewardRow\|([^}|]*)[^}]*\}\}", r"\1", s)
-    s = re.sub(r"\{\{PAGENAME\}\}", "", s)
     for _ in range(4):
         new = re.sub(r"\[\[(?:[^\[\]|]*\|)?([^\[\]]*)\]\]", r"\1", s)
         new = re.sub(r"\[\[([^\[\]|]*)$", r"\1", new)
@@ -29,6 +48,8 @@ def clean_wikitext(s):
         s = new
     s = s.replace("[[", "").replace("]]", "")
     s = re.sub(r"'''?", "", s)
+    s = re.sub(r"\[\[分类:[^\]]*\]\]", "", s)
+    s = re.sub(r"\{\|.*?\|\}", "", s, flags=re.S)
     s = re.sub(r"\n\s*\n+", "\n", s)
     return s.strip()
 
@@ -46,9 +67,12 @@ def parse_quest_body(wt):
             t = clean_wikitext(c).strip()
             t = re.sub(r"^[#*]+\s*", "", t)
             t = re.sub(r"^\s*\d+[.、]\s*", "", t)
-            t = re.sub(r"\s+", " ", t).strip()
-            if t:
-                lines.append(t)
+            t = re.sub(r"\s*\d*px\s*$", "", t)          # 去掉图片宽度残留
+            t = re.sub(r"\|?\s*\d{2,4}px\s*", "", t)
+            t = re.sub(r"\s+", " ", t).strip(" |·、,，")
+            if not t or re.fullmatch(r"[\d\s.|px]+", t):  # 纯数字/尺寸残留
+                continue
+            lines.append(t)
     prose = []
     for name, content in re.findall(r"==+\s*([^=]+?)\s*==+\n(.*?)(?=\n==|\Z)", before, re.S):
         if name.strip() == "任务流程":
@@ -179,8 +203,12 @@ def main():
                 it = it.strip()
                 if it:
                     rewards.append(it)
+        qid = first("任务ID") or ""
+        qid = re.sub(r"[{}\s]", "", qid)
+        if not re.fullmatch(r"[A-Za-z]{1,3}-?\d{1,3}", qid):
+            qid = ""
         q = {
-            "id": first("任务ID") or name,
+            "id": qid or name,
             "name": name,
             "cat": first("任务分类") or "普通任务",
             "place": [x for x in [first("地点1"), first("地点2")] if x],

@@ -82,6 +82,14 @@ node tools/test_site.cjs   # jsdom 冒烟测试（路由 / 浮窗 / 搜索 / 图
 node tools/check_links.cjs # 站内链接与资源引用检查
 ```
 
+## 部署
+
+详细步骤见 [DEPLOY.md](DEPLOY.md)。简述：
+
+**Git 自动部署（推荐）**：在 Cloudflare Pages 里连接本仓库（分支 `main`，Build command 留空，Build output directory 填 `site`），之后双击 `push.bat` 提交推送，Cloudflare 会自动重新部署。
+
+**手动部署**：执行 `npx wrangler login` 登录后，双击 `deploy.bat`。
+
 ## 版权
 
 本站为玩家自发的非商业整理，不作为任何商业用途。
