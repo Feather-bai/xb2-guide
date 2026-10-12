@@ -100,6 +100,27 @@ ok("图鉴异刃列表渲染", view.querySelectorAll(".dex").length > 50, view.q
 const bladeLinks = Array.from(view.querySelectorAll(".dex")).slice(0, 5).map((a) => a.getAttribute("href"));
 ok("图鉴条目外链 wiki", bladeLinks.every((u) => u && u.indexOf("xenoblade2.cn") > -1), bladeLinks.join(" "));
 
+// 名词外链：原刊 OCR 与任务流程里的异刃/道具/地标应渲染成 wiki 外链
+window.location.hash = "#/mag/vol1-007";
+window.dispatchEvent(new window.Event("hashchange"));
+let magLinks = view.querySelectorAll("a.qlink");
+ok("原刊 OCR 渲染出名词外链", magLinks.length > 0, magLinks.length + " 个");
+if (magLinks.length) {
+  const href = magLinks[0].getAttribute("href");
+  ok("名词外链指向 wiki", href && href.indexOf("xenoblade2.cn") > -1, href);
+  ok("名词外链新窗口打开", magLinks[0].getAttribute("target") === "_blank");
+}
+window.location.hash = "#/quests";
+window.dispatchEvent(new window.Event("hashchange"));
+const qlink0 = view.querySelector("[data-quest]");
+if (qlink0) {
+  qlink0.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  const mb = document.getElementById("modalBody");
+  ok("任务浮窗内有名词外链", mb.querySelectorAll('a[href*="xenoblade2.cn"]').length > 0,
+     mb.querySelectorAll('a[href*="xenoblade2.cn"]').length + " 个");
+  document.getElementById("modalClose").dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+}
+
 // 资源文件存在性检查
 function checkSrcs() {
   const missing = [];
@@ -120,7 +141,10 @@ const missing = checkSrcs();
 ok("引用的图片全部存在", missing.length === 0, missing.slice(0, 5).join(", "));
 
 // 浮窗里的任务链接可点（wiki 外链）
-ok("wiki 外链使用 target=_blank", view.innerHTML.indexOf('target="_blank"') > -1 || document.getElementById("modalBody").innerHTML.indexOf('target="_blank"') > -1);
+window.location.hash = "#/story/ch3";
+window.dispatchEvent(new window.Event("hashchange"));
+const storyLinks = view.querySelectorAll('a.qlink[target="_blank"]');
+ok("章节正文里的名词外链新窗口打开", storyLinks.length > 0, storyLinks.length + " 个");
 
 let pass = 0, fail = 0;
 for (const r of results) {

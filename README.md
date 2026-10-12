@@ -76,7 +76,10 @@ python tools/build_mag.py           # mag.js（原刊 68 页索引与 OCR 文本
 python tools/build_index.py         # index.js（模块清单 + 可链接名词索引）
 python tools/build_chapter_images.py # 把原刊配图挂到对应章节
 python tools/link_quests.py         # 把正文里的任务名标注成可点击的浮窗链接
+python tools/link_names.py          # 把异刃/道具/敌人/地标名标注成跳转 wiki 的外链
 ```
+
+> 注意顺序：`link_quests.py` 必须在 `link_names.py` 之前跑，否则已经标注的 `[[任务:…]]` 不会被保护。
 
 测试：
 
