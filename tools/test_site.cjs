@@ -100,6 +100,28 @@ ok("图鉴异刃列表渲染", view.querySelectorAll(".dex").length > 50, view.q
 const bladeLinks = Array.from(view.querySelectorAll(".dex")).slice(0, 5).map((a) => a.getAttribute("href"));
 ok("图鉴条目外链 wiki", bladeLinks.every((u) => u && u.indexOf("xenoblade2.cn") > -1), bladeLinks.join(" "));
 
+// 遍历全部章节：要点等结构化内容不能被渲染成 [object Object]
+let objLeak = 0, keypointTitles = 0, emptyNotes = 0;
+for (const c of X2.chapters || []) {
+  window.location.hash = "#/story/" + c.id;
+  window.dispatchEvent(new window.Event("hashchange"));
+  const html = view.innerHTML;
+  const n = (html.match(/\[object Object\]/g) || []).length;
+  if (n) { objLeak += n; console.log("   章节 " + c.id + " 出现 [object Object] ×" + n); }
+  // 最后一个 .note.note-h 之后不应立刻是空内容
+  const empty = html.match(/<span class="note-h">[^<]*<\/span>\s*<\/div>/g);
+  if (empty) emptyNotes += empty.length;
+  if (!c.steps || !c.steps.length) continue;
+}
+for (const c of X2.chapters || []) {
+  window.location.hash = "#/story/" + c.id;
+  window.dispatchEvent(new window.Event("hashchange"));
+  if ((c.keypoints || []).length) keypointTitles += view.querySelectorAll(".note-h").length;
+}
+ok("所有章节都没有 [object Object]", objLeak === 0, objLeak + " 处");
+ok("章节要点渲染出标题", keypointTitles > 0, keypointTitles + " 个标题");
+ok("要点/备注没有空内容", emptyNotes === 0, emptyNotes + " 处");
+
 // 数据里不应该再把 <b> 之类的标记当成正文显示出来
 window.location.hash = "#/systems/build";
 window.dispatchEvent(new window.Event("hashchange"));

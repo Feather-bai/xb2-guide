@@ -18,6 +18,9 @@ for (const f of files) {
 }
 const view = document.getElementById("view");
 console.log("hash:", window.location.hash, "| view 长度:", view.innerHTML.length);
+const objs = (view.innerHTML.match(/\[object Object\]/g) || []).length;
+console.log("[object Object] 次数:", objs);
+console.log("note-h 标签:", view.querySelectorAll(".note-h").length, "| 首个:", (view.querySelector(".note-h") || {}).textContent);
 console.log("details:", view.querySelectorAll("details").length, "| .qlink:", view.querySelectorAll(".qlink").length);
 const body = view.querySelector("details .acc-body");
 console.log("acc-body:", body ? body.innerHTML.length : "无");

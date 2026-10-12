@@ -42,7 +42,12 @@
   }
 
   function renderLinks(text) {
-    if (!text) return "";
+    if (text == null || text === "") return "";
+    if (typeof text !== "string") {
+      // 结构对象（{text, kind, title}）走 renderable，避免渲染成 [object Object]
+      if (typeof text === "object" && typeof text.text === "string") return renderable(text);
+      return esc(String(text));
+    }
     var out = esc(text);
     // **加粗** -> <strong>（数据里的重点标记）
     out = out.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
@@ -251,6 +256,21 @@
     }).join("") + "</nav>";
   }
 
+  /* 统一处理「纯文本」或「{text, kind, title} 结构」的条目：
+     章节要点与步骤备注都用这个结构，避免对象被当成字符串渲染成 [object Object] */
+  function renderable(item, opt) {
+    opt = opt || {};
+    if (item == null) return "";
+    if (typeof item === "string") return renderLinks(item);
+    if (typeof item === "object") {
+      var kind = item.kind || opt.defaultKind || "";
+      return '<div class="note' + (kind ? " " + kind : "") + '"' + (opt.style ? ' style="' + opt.style + '"' : "") + ">" +
+        (item.title ? '<span class="note-h">' + esc(item.title) + "</span>" : "") +
+        renderLinks(item.text) + "</div>";
+    }
+    return renderLinks(String(item));
+  }
+
   function viewChapter(id) {
     var ch = (X2.chapters || []).filter(function (c) { return c.id === id; })[0];
     if (!ch) return '<div class="empty">没有找到该章节。</div>';
@@ -270,7 +290,7 @@
     }
 
     if (ch.keypoints && ch.keypoints.length) {
-      h.push("<h2>本章要点</h2>" + ch.keypoints.map(function (k) { return renderLinks(k); }).join(""));
+      h.push("<h2>本章要点</h2>" + ch.keypoints.map(function (k) { return renderable(k, { defaultKind: "tip" }); }).join(""));
     }
 
     if (ch.steps && ch.steps.length) {
@@ -279,9 +299,7 @@
         h.push('<li class="step"><p class="step-title">' + renderLinks(s.title) + "</p>" +
           (s.body ? '<div class="step-body">' + renderLinks(s.body) + "</div>" : "") +
           (s.notes && s.notes.length ? s.notes.map(function (n) {
-            var kind = n.kind || "tip";
-            return '<div class="note ' + kind + '" style="margin-top:8px">' +
-              (n.title ? '<span class="note-h">' + esc(n.title) + "</span>" : "") + renderLinks(n.text) + "</div>";
+            return renderable(n, { defaultKind: "tip", style: "margin-top:8px" });
           }).join("") : "") + "</li>");
       });
       h.push("</ol>");
