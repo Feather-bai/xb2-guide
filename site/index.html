@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b1220">
+<meta name="description" content="异度之刃2（异度神剑2）完整攻略站：主线流程、支线任务、战斗系统、异刃养成、图鉴与地图，整合《掌机王Plus 攻略特辑》上下册、wiki 与实战备注。">
+<title>异度之刃2 完整攻略站</title>
+<link rel="preload" href="assets/style.css" as="style">
+<link rel="stylesheet" href="assets/style.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b1220'/%3E%3Cpath d='M16 4l3.4 9.6L28 16l-8.6 2.4L16 28l-3.4-9.6L4 16l8.6-2.4z' fill='%234dd0e1'/%3E%3C/svg%3E">
+</head>
+<body>
+<a class="skip" href="#main">跳到正文</a>
+
+<header class="topbar">
+  <button class="icon-btn" id="navToggle" aria-label="打开导航" aria-expanded="false">
+    <span class="burger" aria-hidden="true"></span>
+  </button>
+  <a class="brand" href="#/home">
+    <span class="brand-mark" aria-hidden="true">X2</span>
+    <span class="brand-text">
+      <strong>异度之刃2</strong>
+      <small>完整攻略站</small>
+    </span>
+  </a>
+  <div class="topbar-actions">
+    <button class="icon-btn" id="searchBtn" aria-label="搜索">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5L21 21"/></svg>
+    </button>
+    <button class="icon-btn" id="themeBtn" aria-label="切换深浅色">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4"/><circle cx="12" cy="12" r="4"/></svg>
+    </button>
+  </div>
+</header>
+
+<div class="layout">
+  <nav class="sidebar" id="sidebar" aria-label="主导航">
+    <div class="sidebar-inner" id="navList"></div>
+    <div class="sidebar-foot">
+      <a href="#/about">资料来源与说明</a>
+    </div>
+  </nav>
+  <div class="scrim" id="scrim" hidden></div>
+
+  <main class="content" id="main" tabindex="-1">
+    <div class="crumbs" id="crumbs"></div>
+    <article id="view" class="view"></article>
+    <footer class="page-foot">
+      <p>本站为玩家自发整理的非商业攻略站，内容整合自《掌机王Plus 异度神剑2 攻略特辑》上下册、<a href="https://xenoblade2.cn/" target="_blank" rel="noopener">乐园数据管理室 wiki</a> 与玩家实战备注。</p>
+      <p>《异度神剑2》（Xenoblade Chronicles 2）版权归 Nintendo / MONOLITHSOFT 所有。</p>
+    </footer>
+  </main>
+</div>
+
+<!-- 支线/名词浮窗 -->
+<div class="modal" id="modal" hidden role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel" role="document">
+    <button class="modal-close" id="modalClose" data-close aria-label="关闭浮窗">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<!-- 搜索面板 -->
+<div class="search-panel" id="searchPanel" hidden>
+  <div class="search-head">
+    <input id="searchInput" type="search" placeholder="搜索章节 / 支线 / 异刃 / 道具…" autocomplete="off" enterkeyhint="search">
+    <button class="icon-btn" id="searchClose" aria-label="关闭搜索">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </div>
+  <div class="search-results" id="searchResults"></div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script src="data/index.js"></script>
+<script src="data/quests.js"></script>
+<script src="data/chapters.js"></script>
+<script src="data/systems.js"></script>
+<script src="data/codex.js"></script>
+<script src="data/extras.js"></script>
+<script src="data/mag.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>
