@@ -43,6 +43,12 @@ git commit -m "更新内容"
 git push origin main
 ```
 
+> **如果 `git push` 连不上 github.com**（本机对 github.com:443 的网络被阻断，但 `api.github.com` 正常）：
+> 用 `python tools/gh_push_state.py "提交信息"` 代替 commit+push。
+> 它通过 GitHub 的 Git Data API 直接把工作区状态同步成一次提交，效果与 push 相同。
+>
+> 前提是 `gh auth status` 显示已登录（`gh auth login`）。
+
 ---
 
 ## 方案 B：手动部署（不依赖 Git）
