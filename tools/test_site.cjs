@@ -100,6 +100,13 @@ ok("图鉴异刃列表渲染", view.querySelectorAll(".dex").length > 50, view.q
 const bladeLinks = Array.from(view.querySelectorAll(".dex")).slice(0, 5).map((a) => a.getAttribute("href"));
 ok("图鉴条目外链 wiki", bladeLinks.every((u) => u && u.indexOf("xenoblade2.cn") > -1), bladeLinks.join(" "));
 
+// 数据里不应该再把 <b> 之类的标记当成正文显示出来
+window.location.hash = "#/systems/build";
+window.dispatchEvent(new window.Event("hashchange"));
+const buildHtml = view.innerHTML;
+ok("正文里没有裸露的 <b> 标记", buildHtml.indexOf("&lt;b&gt;") === -1 && !/<\/?b>/.test(buildHtml.replace(/<strong>|<\/strong>/g, "")));
+ok("重点渲染成 <strong>", view.querySelectorAll("strong").length > 0, view.querySelectorAll("strong").length + " 处");
+
 // 名词外链：原刊 OCR 与任务流程里的异刃/道具/地标应渲染成 wiki 外链
 window.location.hash = "#/mag/vol1-007";
 window.dispatchEvent(new window.Event("hashchange"));

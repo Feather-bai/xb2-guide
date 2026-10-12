@@ -49,6 +49,25 @@ def dump_js(fn, var, obj):
 
 NS = {"blade": "异刃", "item": "物品", "enemy": "敌人", "landmark": "地标"}
 
+# 数据里作者写的加粗标记 <b>…</b> 会被前端转义成可见文字，这里统一改成 **…**，
+# 由前端渲染成 <strong>。其它零散的类 HTML 标记直接删除。
+BOLD_RE = re.compile(r"<\s*b\s*>(.*?)<\s*/\s*b\s*>", re.S | re.I)
+STRAY_TAG_RE = re.compile(r"</?[A-Za-z][A-Za-z0-9]*(?:\s+[^<>]*)?/?>")
+# 明显是串码的残留（例如「光（）」这种空括号里的单字）
+STRAY_PAREN_CHAR_RE = re.compile(r"（）")
+
+
+def sanitize(s):
+    if not s or ("<" not in s and "（）" not in s):
+        return s
+    out = BOLD_RE.sub(lambda m: "**" + m.group(1).strip() + "**", s)
+    out = re.sub(r"<\s*br\s*/?\s*>", "\n", out, flags=re.I)
+    out = STRAY_TAG_RE.sub("", out)
+    out = STRAY_PAREN_CHAR_RE.sub("", out)
+    out = re.sub(r"\*\*\s*\*\*", "", out)      # 空加粗
+    out = re.sub(r"[ \t]{2,}", " ", out)
+    return out.strip()
+
 
 def build_pattern(codex):
     entries = []   # (name, ns)
@@ -86,6 +105,9 @@ def linker(codex):
             return out
         if isinstance(text, list):
             return [mark(x) for x in text]
+        if not isinstance(text, str):
+            return text
+        text = sanitize(text)
         if not text or "[[" in text and "]]" not in text:
             return text
         slots = []

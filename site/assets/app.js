@@ -44,6 +44,8 @@
   function renderLinks(text) {
     if (!text) return "";
     var out = esc(text);
+    // **加粗** -> <strong>（数据里的重点标记）
+    out = out.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
     // [[...]] 显式标注
     out = out.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, function (_, target, label) {
       var show = label || target.split(":").pop();
