@@ -90,11 +90,15 @@ node tools/check_links.cjs  # 站内链接、任务链接与资源引用检查
 
 ## 部署
 
+线上地址：**https://xb2-guide.pages.dev**
+
 详细步骤见 [DEPLOY.md](DEPLOY.md)。简述：
 
-**Git 自动部署（推荐）**：在 Cloudflare Pages 里连接本仓库（分支 `main`，Build command 留空，Build output directory 填 `site`），之后双击 `push.bat` 提交推送，Cloudflare 会自动重新部署。
+**重新发布**：设置 `CLOUDFLARE_API_TOKEN` 后执行 `python tools/cf_publish.py`（只上传变化的文件）。
 
-**手动部署**：执行 `npx wrangler login` 登录后，双击 `deploy.bat`。
+**推送到 GitHub**：`python tools/gh_push_state.py "提交信息"`（本机对 `github.com:443` 直连被阻断，该脚本走 GitHub API）。
+
+想在推送后自动部署，在 Cloudflare 控制台把仓库连成 Pages 的 Git 项目即可（Build command 留空，输出目录 `site`）。
 
 ## 版权
 
