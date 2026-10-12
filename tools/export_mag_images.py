@@ -31,7 +31,5 @@ for path, tag in JOBS:
             print(tag, i + 1, flush=True)
     doc.close()
 
-with open(os.path.join(WS, "site", "data", "magmanifest.json"), "w", encoding="utf-8") as f:
-    json.dump(manifest, f, ensure_ascii=False, indent=0)
 total = sum(os.path.getsize(os.path.join(OUT, f)) for f in os.listdir(OUT))
 print("pages", len(manifest), "total MB", round(total / 1e6, 1))

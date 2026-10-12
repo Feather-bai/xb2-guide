@@ -38,10 +38,34 @@ def add(kind, name, url=None):
     linkables.append({"kind": kind, "name": name, "url": url or u(name)})
 
 
-try:
-    codex = json.load(open(os.path.join(D, "codex.js"), encoding="utf-8").read().split("window.X2.codex=", 1)[1].rstrip(";\n"))
-except Exception:
-    codex = {}
+def load_js(fn, var):
+    """读取由 site/data/*.js 写出的 `window.X2.xxx=...;` 数据。"""
+    p = os.path.join(D, fn)
+    if not os.path.exists(p):
+        return {}
+    src = open(p, encoding="utf-8").read()
+    marker = var + "="
+    if marker not in src:
+        return {}
+    tail = src.split(marker, 1)[1]
+    # 去掉结尾的分号（后面可能还有别的赋值）
+    tail = tail.split("\nwindow.X2.")[0].rstrip()
+    if tail.endswith(";"):
+        tail = tail[:-1]
+    # 若同一行还有其它赋值，截到分号处
+    depth = 0
+    for i, ch in enumerate(tail):
+        if ch in "{[":
+            depth += 1
+        elif ch in "}]":
+            depth -= 1
+        elif ch == ";" and depth <= 0:
+            tail = tail[:i]
+            break
+    return json.loads(tail)
+
+
+codex = load_js("codex.js", "window.X2.codex")
 
 for it in (codex.get("blade") or {}).get("items", []):
     add("blade", it["name"], it["url"])
