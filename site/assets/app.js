@@ -580,6 +580,15 @@
     document.title = (mod && top !== "home" ? mod.title + " · " : "") + "异度之刃2 完整攻略站";
     // 挂载互动地图（仅章节页有 map-host）
     if (window.X2Map && window.X2Map.mountChapters) window.X2Map.mountChapters();
+    // 章节切换条：把当前章节滚进可视区（切换条本身可横向滚动）
+    var cbar = $(".chapterbar");
+    if (cbar && cbar.scrollWidth > cbar.clientWidth + 1) {
+      var cur = cbar.querySelector("a.active");
+      if (cur) {
+        var want = cur.offsetLeft - (cbar.clientWidth - cur.offsetWidth) / 2;
+        cbar.scrollLeft = Math.max(0, want);
+      }
+    }
     window.scrollTo({ top: 0, behavior: "instant" in document.documentElement.style ? "instant" : "auto" });
     toggleNav(false);
   }

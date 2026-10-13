@@ -1,8 +1,16 @@
 # -*- coding: utf-8 -*-
 """生成 site/data/maps.js —— 地图数据（底图信息 + 标记点 + 区域索引）
 
+⚠️ 已被 tools/rebuild_maps.cjs 取代，不要再用本脚本覆盖 maps.js：
+   本脚本只输出「宝箱 / 采集点」两个图层（且受 SMW 50 条上限截断），
+   而现在的 maps.js 由 rebuild_maps.cjs 从 .extract/mapdata/layers.json 生成，
+   包含宝箱 / 采集点 / 打捞点 / 敌人 / NPC 五个完整图层。保留仅供历史参考。
+
 数据来源：wiki 的 JSON:Mapinfo/*（底图与边界）、JSON:FLD maplist/*（地图清单），
-以及 SMW 带坐标的标记点（宝箱 / 采集点）。底图按需从 wiki 图片服务器加载。
+以及 SMW 带坐标的标记点（宝箱 / 采集点）。
+
+底图已下载到本地（site/assets/maps/<id>.png，见 tools/fetch_map_images.py），
+所以 img 指向站内相对路径；外部服务器地址保留在 imgRemote，便于核对与重新下载。
 """
 import json, os, re
 from collections import defaultdict
@@ -13,6 +21,7 @@ OUT = os.path.join(WS, "site", "data")
 os.makedirs(OUT, exist_ok=True)
 
 IMG_BASE = "https://images.xenoblade2.cn/images"
+LOCAL_MAP_DIR = "assets/maps"
 
 
 def file_name(map_name):
@@ -109,6 +118,9 @@ def main():
     maps = []
     for name, o in info.items():
         m = per_map.get(name, {"tbox": [], "colle": []})
+        remote = image_url(name, resolved)
+        local = "{}/{}.png".format(LOCAL_MAP_DIR, name)
+        on_disk = os.path.exists(os.path.join(OUT, "..", "assets", "maps", name + ".png"))
         maps.append({
             "id": name,
             "area": o.get("mapName", ""),
@@ -116,7 +128,9 @@ def main():
             "w": o.get("Width"),
             "h": o.get("Height"),
             "b": [o.get("LowerX"), o.get("LowerZ"), o.get("UpperX"), o.get("UpperZ")],
-            "img": image_url(name, resolved),
+            # 本地有就优先用本地底图，没有则回退到 wiki 外链
+            "img": local if on_disk else remote,
+            "imgRemote": remote,
             "tbox": m["tbox"],
             "colle": m["colle"],
         })

@@ -30,7 +30,30 @@
     "伊拉": "伊拉王国",
     "第一低轨道站": "第一低轨道站",
   };
-  var AREAS = Object.keys(MD.areas || {});
+  /* 预处理地图索引：
+     - 去掉 _shipoff / lodoff 这类与主图完全同尺寸的重复变体
+     - 把 DLC「黄金之国」的地图从本体区域里拆出去，避免和本体地图混成一长串 */
+  var DUP_VARIANT = /(_shipoff|lodoff)$/;
+  var DLC_AREA = { "dlc3_ma41a": "黄金之国・古拉（DLC）" };
+  var AREA_MAPS = (function () {
+    var out = {};
+    var has = {};
+    MD.maps.forEach(function (m) { has[m.id] = true; });
+    Object.keys(MD.areas || {}).forEach(function (a) {
+      out[a] = out[a] || [];
+      (MD.areas[a] || []).forEach(function (id) {
+        if (DUP_VARIANT.test(id) && has[id.replace(DUP_VARIANT, "")]) return;
+        var key = id.split("_").slice(0, 2).join("_");
+        if (/^dlc3_/.test(id) && DLC_AREA[key] && a !== DLC_AREA[key]) {
+          (out[DLC_AREA[key]] = out[DLC_AREA[key]] || []).push(id);
+          return;
+        }
+        out[a].push(id);
+      });
+    });
+    return out;
+  })();
+  var AREAS = Object.keys(AREA_MAPS);
 
   function chapterText(ch) {
     var parts = [];
@@ -52,7 +75,7 @@
   function detectAreas(ch, landmarks) {
     var found = [];
     function push(a) {
-      if (a && MD.areas[a] && found.indexOf(a) === -1) found.push(a);
+      if (a && AREA_MAPS[a] && found.indexOf(a) === -1) found.push(a);
     }
     // 1) 正文里出现区域名
     var text = chapterText(ch);
@@ -82,10 +105,35 @@
     return found;
   }
 
+  /* 图层定义：on 为初始是否勾选；key 对应数据字段；prefix 是 wiki 页面名前缀 */
   var TYPE_META = {
-    tbox: { label: "宝箱", color: "#ffc857", glyph: "▣" },
-    colle: { label: "采集点", color: "#5ddc9a", glyph: "✦" },
+    tbox: { key: "tbox", label: "宝箱", color: "#ffc857", glyph: "▣", on: true },
+    colle: { key: "colle", label: "采集点", color: "#5ddc9a", glyph: "✦", on: true },
+    salvage: { key: "salvage", label: "打捞点", color: "#4dd0e1", glyph: "⚓", on: true, prefix: "打捞点:" },
+    enemy: { key: "enemy", label: "敌人", color: "#ff6b6b", glyph: "", dot: true, on: false, cluster: true, prefix: "敌人:" },
+    npc: { key: "npc", label: "NPC", color: "#c792ea", glyph: "", dot: true, square: true, on: false, cluster: true, prefix: "NPC:" },
   };
+  var LAYER_KEYS = Object.keys(TYPE_META);
+
+  function defaultTypes() {
+    var t = {};
+    LAYER_KEYS.forEach(function (k) { t[k] = !!TYPE_META[k].on; });
+    return t;
+  }
+
+  /* 敌人出现时段（POP_TIME 位掩码，换算同 wiki） */
+  var POP_TIME = {
+    1: "7:00~11:59", 2: "12:00~15:59", 4: "16:00~18:59", 8: "19:00~23:59",
+    16: "0:00~4:59", 32: "5:00~6:59", 64: "7:00~18:59", 128: "19:00~6:59", 256: "0:00~23:59",
+  };
+  /* 敌人出现天气（popWeather 低 4 位：晴 / WA / WB / WC，与 wiki 前端一致） */
+  function weatherText(w) {
+    if (w == null) return "";
+    var bit = function (n) { return (w >> n) % 2; };
+    var names = ["晴", "雨", "雷", "沙"];
+    var hit = names.filter(function (_, i) { return bit(i); });
+    return hit.length ? hit.join(" / ") : "";
+  }
 
   var uid = 0;
 
@@ -112,7 +160,7 @@
    * @returns {HTMLElement}
    */
   function renderChapterMap(chapter) {
-    var areas = detectAreas(chapter).filter(function (a) { return (MD.areas[a] || []).length; });
+    var areas = detectAreas(chapter).filter(function (a) { return (AREA_MAPS[a] || []).length; });
     var box = el("section", "mapcard");
     box.id = "mapcard-" + chapter.id;
 
@@ -125,11 +173,11 @@
     // 该章节涉及的地图（保持区域顺序）
     var mapIds = [];
     areas.forEach(function (a) {
-      (MD.areas[a] || []).forEach(function (id) { if (mapIds.indexOf(id) === -1) mapIds.push(id); });
+      (AREA_MAPS[a] || []).forEach(function (id) { if (mapIds.indexOf(id) === -1) mapIds.push(id); });
     });
 
     var firstId = mapIds[0];
-    var state = { id: firstId, types: { tbox: true, colle: true }, key: "" };
+    var state = { id: firstId, types: defaultTypes(), key: "" };
 
     box.innerHTML =
       '<div class="mapcard-head">' +
@@ -161,7 +209,7 @@
     var node = "map-" + (++uid);
 
     function areaMaps(area) {
-      return (MD.areas[area] || []).slice();
+      return (AREA_MAPS[area] || []).slice();
     }
 
     function currentArea() {
@@ -172,7 +220,7 @@
       areaBox.innerHTML = "";
       areas.forEach(function (a) {
         var b = el("button", "chip" + (a === currentArea() ? " blue" : ""), esc(a) +
-          ' <span class="chip-n">' + (MD.areas[a] || []).length + "</span>");
+          ' <span class="chip-n">' + (AREA_MAPS[a] || []).length + "</span>");
         b.type = "button";
         if (a === currentArea()) b.classList.add("active");
         b.addEventListener("click", function () {
@@ -185,13 +233,32 @@
       });
     }
 
+    /* 地图标签：按 menuGroup 分组后只留末尾序号（如 格尔特蒙特 f01/f03 → 格尔特蒙特1 / 格尔特蒙特3，
+       托里格镇 c_01 → 托里格镇1）。仅在「同一分组内」序号撞车时才退回完整后缀区分。 */
+    function groupLabels(ids) {
+      var P = ids.map(function (id) {
+        var m = MAPS[id] || {};
+        var s = id.replace(/^(dlc3_)?/, "").replace(/(shipoff|lodoff)$/, "");
+        var mm = s.match(/(\d+)([a-z]*)$/i);
+        return { grp: m.group || m.area || "", num: mm ? +mm[1] : null, post: mm ? mm[2].toLowerCase() : "", full: s };
+      });
+      var count = {};
+      P.forEach(function (p) { if (p.num != null) { var k = p.grp + "|" + p.num + p.post; count[k] = (count[k] || 0) + 1; } });
+      return P.map(function (p) {
+        if (p.num == null) return "";     // 没有序号的地图只显示分组名（如「废弃工厂」）
+        return count[p.grp + "|" + p.num + p.post] > 1 ? p.full : p.num + p.post;
+      });
+    }
+
     function renderMaps() {
+      var ids = areaMaps(currentArea());
+      var labs = groupLabels(ids);
       mapBox.innerHTML = "";
-      areaMaps(currentArea()).forEach(function (id) {
+      ids.forEach(function (id, i) {
         var m = MAPS[id];
         if (!m) return;
-        var b = el("button", "chip" + (id === state.id ? " blue" : ""),
-          esc(m.group ? m.group + "・" + (m.id.indexOf("floor") > -1 ? m.id.split("_").pop() : m.id) : m.id));
+        var label = (m.group || m.area) + labs[i];
+        var b = el("button", "chip" + (id === state.id ? " blue" : ""), esc(label));
         b.type = "button";
         b.title = m.area + " · " + m.id + "（" + m.w + "×" + m.h + "）";
         b.addEventListener("click", function () { state.id = id; renderMaps(); showMap(); });
@@ -201,16 +268,18 @@
 
     function renderTypes() {
       typeBox.innerHTML = "";
-      Object.keys(TYPE_META).forEach(function (t) {
-        var m = MAPS[state.id] || { tbox: [], colle: [] };
+      var m = MAPS[state.id] || {};
+      LAYER_KEYS.forEach(function (t) {
         var cnt = (m[t] || []).length;
-        var b = el("button", "chip map-type" + (state.types[t] ? " on" : ""),
-          '<i class="dot" style="background:' + TYPE_META[t].color + '"></i>' + TYPE_META[t].label +
-          ' <span class="chip-n">' + cnt + "</span>");
+        var b = el("button", "chip map-type" + (state.types[t] ? " on" : "") + (cnt ? "" : " no-data"),
+          '<i class="dot" style="background:' + TYPE_META[t].color + (TYPE_META[t].square ? ";border-radius:2px" : "") + '"></i>' +
+          TYPE_META[t].label + ' <span class="chip-n">' + cnt + "</span>");
         b.type = "button";
+        if (!cnt) b.disabled = true;
         b.addEventListener("click", function () {
+          if (!cnt) return;
           state.types[t] = !state.types[t];
-          renderTypes(); drawMarkers();
+          renderTypes(); showMap();
         });
         typeBox.appendChild(b);
       });
@@ -267,53 +336,103 @@
       var m = MAPS[state.id] || {};
       var key = (state.key || "").trim().toLowerCase();
       var shown = 0;
-      var total = (m.tbox || []).length + (m.colle || []).length;
+      var total = LAYER_KEYS.reduce(function (a, t) { return a + (m[t] || []).length; }, 0);
+
+      // 组装每个图层的待绘点（敌人 / NPC 这类密集图层用聚合层渲染）
+      var groups = [];
+      LAYER_KEYS.forEach(function (t) {
+        if (!state.types[t]) return;
+        var pts = (m[t] || []).filter(function (p) {
+          if (!key) return true;
+          var hay = ((p.t || "") + " " + (p.n || "") + " " + (p.type || "")).toLowerCase();
+          return hay.indexOf(key) > -1;
+        });
+        if (!pts.length) return;
+        groups.push({ t: t, pts: pts });
+        shown += pts.length;
+      });
+
       if (map) {
         if (layers.markers) { map.removeLayer(layers.markers); layers.markers = null; }
-        var group = window.L.layerGroup();
-        Object.keys(TYPE_META).forEach(function (t) {
-          if (!state.types[t]) return;
-          (m[t] || []).forEach(function (pt) {
-            var title = pt.t || "";
-            if (key && title.toLowerCase().indexOf(key) === -1) return;
-            var meta = TYPE_META[t];
-            var icon = window.L.divIcon({
-              className: "x2map-marker",
-              html: '<span style="background:' + meta.color + '">' + meta.glyph + "</span>",
-              iconSize: [18, 18], iconAnchor: [9, 9],
-            });
-            var mk = window.L.marker([-pt.z, -pt.x], { icon: icon, title: title, riseOnHover: true });
-            var tip = "<b>" + esc(title) + "</b>";
-            if (pt.pop) tip += "<br>内容：" + esc(pt.pop);
-            if (pt.gold) tip += "<br>金币：" + esc(pt.gold);
-            mk.bindTooltip(tip, { direction: "top", offset: [0, -8] });
-            mk.bindPopup(
-              '<div class="x2pop"><b>' + esc(title) + "</b>" +
-              (pt.pop ? "<div>内容：" + esc(pt.pop) + "</div>" : "") +
-              (pt.gold ? "<div>金币：" + esc(pt.gold) + "</div>" : "") +
-              '<div class="x2pop-sub">' + meta.label + " · 坐标 " + pt.x.toFixed(1) + ", " + pt.z.toFixed(1) + "</div>" +
-              '<div class="x2pop-link"><a href="' + esc(wikiUrl(pt.t)) + '" target="_blank" rel="noopener">在 wiki 查看 ↗</a></div>' +
-              "</div>"
-            );
-            mk.addTo(group);
-            shown++;
-          });
+        var outer = window.L.layerGroup();
+        groups.forEach(function (g) {
+          var meta = TYPE_META[g.t];
+          // 密集图层用聚合，避免几百个点挤在一起卡顿、也没法点
+          var useCluster = !!meta.cluster && g.pts.length > 60 && !!window.L.markerClusterGroup;
+          var layer = useCluster
+            ? window.L.markerClusterGroup({ maxClusterRadius: 48, showCoverageOnHover: false, chunkedLoading: true })
+            : window.L.layerGroup();
+          var icon = layerIcon(meta);   // 同一图层共用一个图标实例
+          g.pts.forEach(function (pt) { layer.addLayer(makeMarker(pt, meta, icon)); });
+          outer.addLayer(layer);
         });
-        group.addTo(map);
-        layers.markers = group;
-      } else {
-        // 无 Leaflet 时只统计数量
-        Object.keys(TYPE_META).forEach(function (t) {
-          if (!state.types[t]) return;
-          (m[t] || []).forEach(function (pt) {
-            if (key && (pt.t || "").toLowerCase().indexOf(key) === -1) return;
-            shown++;
-          });
-        });
+        outer.addTo(map);
+        layers.markers = outer;
       }
       status.innerHTML = "<b>" + esc(m.area) + "</b> · " + esc(m.id) +
         " ｜ 显示 <b>" + shown + "</b> / " + total + " 个标记点" +
         (total ? "" : "（该地图暂无标记数据，仅作底图参考）");
+    }
+
+    var iconCache = {};
+    function layerIcon(meta) {
+      var k = meta.label;
+      if (!iconCache[k]) iconCache[k] = window.L.divIcon({
+        className: "x2map-marker" + (meta.dot ? " dot" : ""),
+        html: '<span' + (meta.square ? ' class="sq"' : "") + ' style="background:' + meta.color + '">' + (meta.glyph || "") + "</span>",
+        iconSize: [18, 18], iconAnchor: [9, 9],
+      });
+      return iconCache[k];
+    }
+
+    function makeMarker(pt, meta, icon) {
+      var mk = window.L.marker([-pt.z, -pt.x], { icon: icon, title: pt.t || "", riseOnHover: true, x2pt: pt, x2meta: meta });
+      // 用函数形式的 content：内容在悬停/点击时才生成，几百个点也能秒开
+      mk.bindTooltip(function (l) { return markerTip(l.options.x2pt, l.options.x2meta); }, { direction: "top", offset: [0, -8] });
+      mk.bindPopup(function (l) { return popupHtml(l.options.x2pt, l.options.x2meta); });
+      return mk;
+    }
+
+    /* 弹窗标题：类型 + 名称（宝箱用编号，采集点用类型名，其余用中文名，缺则退回内部编号） */
+    function poiName(pt, key) {
+      if (key === "tbox") return pt.t || "";
+      if (key === "colle") return pt.type || pt.n || pt.t || "";
+      return pt.n || pt.t || "";
+    }
+
+    function markerTip(pt, meta) {
+      return "<b>" + esc(meta.label + "：" + poiName(pt, meta.key)) + "</b>";
+    }
+
+    function popupHtml(pt, meta) {
+      var h = '<div class="x2pop"><b>' + esc(meta.label + "：" + poiName(pt, meta.key)) + "</b>";
+      if (meta.key === "tbox") {
+        if (pt.pop) h += "<div>内容：" + esc(pt.pop) + "</div>";
+        if (pt.gold) h += "<div>金币：" + esc(pt.gold) + "</div>";
+        if (pt.skill) h += "<div>开启所需场景技能：" + esc(pt.skill) + "</div>";
+      } else if (meta.key === "colle") {
+        var d = (MD.colleDrops || {})[pt.type];
+        if (d && d.drops && d.drops.length) {
+          h += '<div class="x2pop-drops">' + d.drops.map(function (x) {
+            var p = String(x[1] || ""); if (p && !/%/.test(p)) p += "%";
+            return '<span class="x2pop-item">' + esc(x[0]) + '</span><span class="x2pop-p">' + esc(p) + "</span>";
+          }).join("") + "</div>";
+        }
+        if (d && d.multi) h += '<div class="x2pop-sub">单次采集数量：' + esc(d.multi) + "</div>";
+      } else if (meta.key === "enemy") {
+        if (POP_TIME[pt.pop]) h += "<div>出现时段：" + esc(POP_TIME[pt.pop]) + "</div>";
+        var w = weatherText(pt.w); if (w) h += "<div>出现天气：" + esc(w) + "</div>";
+      }
+      // wiki 链接：宝箱编号 / 采集点类型名 / 其余用中文名
+      var page = "";
+      if (meta.key === "tbox" && /^\d+$/.test(pt.t || "")) page = "宝箱:" + pt.t;
+      else if (meta.key === "colle" && pt.type) page = "采集点:" + pt.type;
+      else if (pt.n) page = meta.prefix + pt.n;
+      if (page) {
+        var label = meta.key === "salvage" ? "具体打捞物品在 wiki 查看 ↗" : "在 wiki 查看 ↗";
+        h += '<div class="x2pop-link"><a href="' + esc(wikiUrl(page)) + '" target="_blank" rel="noopener">' + label + "</a></div>";
+      }
+      return h + "</div>";
     }
 
     search.addEventListener("input", function () {

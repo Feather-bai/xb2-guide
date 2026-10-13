@@ -126,8 +126,13 @@ ok("要点/备注没有空内容", emptyNotes === 0, emptyNotes + " 处");
 ok("地图数据：90 张地图", ((X2.mapsData || {}).maps || []).length === 90, "得到 " + (((X2.mapsData || {}).maps) || []).length);
 ok("地图数据：区域索引", Object.keys((X2.mapsData || {}).areas || {}).length >= 15,
    Object.keys((X2.mapsData || {}).areas || {}).length + " 个区域");
-const mapMarkers = ((X2.mapsData || {}).maps || []).reduce((n, m) => n + (m.tbox || []).length + (m.colle || []).length, 0);
-ok("地图数据：标记点数量", mapMarkers > 1000, mapMarkers + " 个");
+const mapMarkers = ((X2.mapsData || {}).maps || []).reduce(
+  (n, m) => n + ["tbox", "colle", "salvage", "enemy", "npc"].reduce((a, k) => a + (m[k] || []).length, 0), 0);
+ok("地图数据：标记点数量", mapMarkers > 8000, mapMarkers + " 个");
+const layerTotals = ["tbox", "colle", "salvage", "enemy", "npc"].map(
+  (k) => k + ":" + ((X2.mapsData || {}).maps || []).reduce((n, m) => n + (m[k] || []).length, 0));
+ok("地图数据：五个图层齐全", ["tbox", "colle", "salvage", "enemy", "npc"].every(
+  (k) => ((X2.mapsData || {}).maps || []).reduce((n, m) => n + (m[k] || []).length, 0) > 0), layerTotals.join(" "));
 window.location.hash = "#/story/ch2";
 window.dispatchEvent(new window.Event("hashchange"));
 const mapHost = view.querySelector("[data-map-host]");
@@ -138,7 +143,9 @@ if (mapHost) {
      mapHost.querySelectorAll(".map-areas .chip").length + " 个区域");
   ok("地图切换按钮", mapHost.querySelectorAll(".map-maps .chip").length > 0,
      mapHost.querySelectorAll(".map-maps .chip").length + " 张地图");
-  ok("标记类型筛选按钮", mapHost.querySelectorAll(".map-types .map-type").length === 2);
+  const typeLabels = Array.prototype.map.call(mapHost.querySelectorAll(".map-types .map-type"), (c) => c.textContent.trim());
+  ok("标记类型筛选按钮（5 个图层）", typeLabels.length === 5, typeLabels.join(" / "));
+  ok("默认只开宝箱 / 采集点 / 打捞点", mapHost.querySelectorAll(".map-types .map-type.on").length === 3);
   ok("标记搜索框", !!mapHost.querySelector(".map-search"));
   ok("地图状态行显示标记数", /显示\s*\d+/.test(mapHost.querySelector(".map-status").textContent),
      (mapHost.querySelector(".map-status").textContent || "").slice(0, 60));

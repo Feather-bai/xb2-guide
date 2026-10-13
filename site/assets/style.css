@@ -282,13 +282,15 @@ figure img{border-radius:var(--radius-s);border:1px solid var(--line);cursor:zoo
 figcaption{font-size:12.4px;color:var(--fg-mute);margin-top:5px}
 .pagemeta{font-size:11.6px;color:var(--fg-mute);margin-top:4px}
 
-/* 顶部章节切换 */
+/* 顶部章节切换：一行放不下时可横向滚动，并显示滚动条 */
 .chapterbar{
   position:sticky;top:var(--topbar-h);z-index:12;display:flex;gap:6px;overflow-x:auto;
-  padding:8px 0;background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(8px);
-  -webkit-overflow-scrolling:touch;scrollbar-width:none;margin:0 0 6px;
+  padding:8px 0 10px;background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(8px);
+  -webkit-overflow-scrolling:touch;scrollbar-width:thin;margin:0 0 6px;
 }
-.chapterbar::-webkit-scrollbar{display:none}
+.chapterbar::-webkit-scrollbar{height:6px}
+.chapterbar::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
+.chapterbar::-webkit-scrollbar-track{background:transparent}
 .chapterbar a{
   flex:0 0 auto;padding:5px 11px;border-radius:999px;background:var(--card);border:1px solid var(--line);
   font-size:13px;color:var(--fg-dim);white-space:nowrap;
@@ -382,9 +384,12 @@ figcaption{font-size:12.4px;color:var(--fg-mute);margin-top:5px}
 .map-hint{font-size:11.6px;color:var(--fg-mute);margin-left:auto}
 .map-toolbar{margin-bottom:7px}
 .map-toolbar2{margin-bottom:5px}
-.map-areas,.map-maps,.map-types{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
-.map-areas::-webkit-scrollbar,.map-maps::-webkit-scrollbar,.map-types::-webkit-scrollbar{display:none}
+/* 区域 / 地图条：一行放不下就换行，保证每一项都能看到、点到 */
+.map-areas,.map-maps{display:flex;flex-wrap:wrap;gap:6px}
+.map-types{display:flex;gap:6px}
 .map-areas .chip,.map-maps .chip,.map-types .chip{cursor:pointer;flex:0 0 auto;border:1px solid var(--line)}
+/* 地图条目在窄屏上更紧凑，避免地图特别多的区域（如古拉）把地图挤下去 */
+.map-maps .chip{padding:3px 8px;font-size:12px;gap:3px}
 .map-areas .chip.active,.map-areas .chip.blue,.map-maps .chip.blue{background:var(--accent);border-color:var(--accent);color:#04121a;font-weight:650}
 .chip-n{opacity:.7;font-variant-numeric:tabular-nums;font-size:11px}
 .map-filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:2px 0 8px}
@@ -409,9 +414,23 @@ html[data-theme="light"] .map-canvas{background:#dde6f2}
   color:#10192b;font-size:11px;font-weight:700;border:1.5px solid rgba(8,18,32,.75);
   box-shadow:0 1px 4px rgba(0,0,0,.5);
 }
+/* 密集图层（敌人 / NPC）用小圆点，减少遮挡 */
+.x2map-marker.dot span{width:9px;height:9px;font-size:0;border-width:1px}
+.x2map-marker.dot span.sq{border-radius:2px}
+/* 该地图没有的图层：置灰不可点（类名不能叫 empty，会撞上全局 .empty 空状态样式） */
+.map-types .map-type.no-data{opacity:.32;cursor:not-allowed}
+.map-types .map-type.no-data .chip-n{display:none}
+/* 聚合图标配色跟随主题 */
+.marker-cluster-small,.marker-cluster-medium,.marker-cluster-large{background:rgba(77,208,225,.28)}
+.marker-cluster-small div,.marker-cluster-medium div,.marker-cluster-large div{background:rgba(77,208,225,.92);color:#04121a;font-weight:700}
+.marker-cluster span{line-height:30px}
 .x2pop{font-size:13px;line-height:1.5;min-width:150px}
 .x2pop-sub{color:#6b7a93;font-size:11.6px;margin-top:3px}
 .x2pop-link{margin-top:5px}
+/* 采集点掉落表：左道具右概率 */
+.x2pop-drops{display:grid;grid-template-columns:1fr auto;gap:1px 14px;margin:3px 0 1px}
+.x2pop-item{white-space:nowrap}
+.x2pop-p{color:#8fa0bb;font-variant-numeric:tabular-nums;text-align:right}
 .leaflet-container .leaflet-control-attribution{font-size:10.5px;background:rgba(11,18,32,.78);color:#c8d3e4}
 .leaflet-container .leaflet-control-attribution a{color:var(--accent)}
 html[data-theme="light"] .leaflet-container .leaflet-control-attribution{background:rgba(255,255,255,.82);color:#42506b}

@@ -53,9 +53,20 @@ site/
 
 每章「流程步骤」上方会插入一张对照地图，数据全部来自 wiki：
 
-- **底图**：wiki 的 90 张地图原图（`JSON:Mapinfo/*` 提供 `Name / mapName / menuGroup / Width / Height / LowerX…UpperZ`），按需从 `images.xenoblade2.cn` 加载，不占用仓库体积。
-- **标记点**：SMW 中带坐标（`PosX / PosZ`）的**宝箱 475 个**与**采集点 854 个**，按 `Areas` 归到各地图。
-- **区域与地图**：根据本章正文里出现的地名自动识别区域，再列出该区域的所有地图；章节地点列表里出现的区域会被优先选中。
+- **底图**：wiki 的 90 张地图原图（`JSON:Mapinfo/*` 提供 `Name / mapName / menuGroup / Width / Height / LowerX…UpperZ`），已下载到 `site/assets/maps/<id>.png` **本地托管**（合计约 12 MB），页面上按需加载，不再走 `images.xenoblade2.cn` 外链（`imgRemote` 保留原始外链以备核对）。
+- **标记点**：wiki 的 5 个图层，按 `Areas` 归到各地图，可分别开关：
+  | 图层 | 数量 | 取法 | 默认 |
+  | --- | --- | --- | --- |
+  | 宝箱 | 663 | SMW（坐标 + 内容 / 金币 / 场景技能） | 开 |
+  | 采集点 | 1523 | SMW（坐标 + 类型）+ `[[采集物::+]]` 掉落表 | 开 |
+  | 打捞点 | 61 | `JSON:Gmk/salvage` + `JSON:SalvagePoint/*`（名称） | 开 |
+  | 敌人 | 4238 | `JSON:Gmk/enemy` + `EnemyGmkMap`/`EnemyIdMap`（名称、出现时段 / 天气） | 关 |
+  | NPC | 2067 | `JSON:Gmk/npc` + APK 数据库（中文名，覆盖约 35%） | 关 |
+
+  弹窗按类型展示：宝箱「宝箱：编号 + 内容 / 金币 / 场景技能」，采集点「采集点：类型名 + 掉落表（道具 + 概率）」，打捞点「打捞点：名称」，敌人「敌人：名称 + 出现时段 / 天气」，NPC「NPC：名称」；都带跳 wiki 的链接，不显示坐标。
+
+  > 旧版只抓了宝箱 475 + 采集点 854，因为脚本把 SMW 的 `limit=50` 写死在请求里。**SMW 的「查询级 limit」其实可达 2000**（offset 分页仍然无效），改成 `|limit=2000` 一次即可取全。敌人 / NPC 数据密集，默认不勾选，勾选后自动聚合（markercluster）。
+- **区域与地图**：根据本章正文里出现的地名自动识别区域，再列出该区域的所有地图；章节地点列表里出现的区域会被优先选中。地图条按 `menuGroup` 分组，标签只留序号（`格尔特蒙特 f01/f03` → 格尔特蒙特1 / 格尔特蒙特3，`托里格镇 c_01` → 托里格镇1），一行放不下时自动换行；与主图同尺寸的 `_shipoff / lodoff` 重复变体会被剔除，DLC「黄金之国」地图单独归入一个区域。
 - **交互**：Leaflet（`CRS.Simple` + `imageOverlay`）实现拖动 / 滚轮缩放，标记类型（宝箱 / 采集点）可开关，支持按名称筛选标记点，点标记弹出详情并可跳 wiki 原页。
 
 > 坐标换算沿用 wiki 的规则：`bounds = [[-LowerZ, -LowerX], [-UpperZ, -UpperX]]`，标记点位置为 `[-PosZ, -PosX]`。
@@ -94,11 +105,22 @@ python tools/link_names.py          # 把异刃/道具/敌人/地标名标注成
 
 ```bash
 python tools/fetch_mapdata.py       # 抓 JSON:Mapinfo/* 与 JSON:FLD maplist/*
-python tools/fetch_markers.py       # 按地图抓带坐标的宝箱 / 采集点（约 180 次请求，可断点续传）
-python tools/build_maps.py          # maps.js（90 张底图 + 1329 个标记点 + 区域索引）
+python tools/fetch_markers.py       # 兼容旧版：按地图抓带坐标的宝箱 / 采集点
+python tools/fetch_layers.cjs       # 抓 5 个图层（JSON:Gmk/*）+ SMW 补宝箱 / 采集点详情
+python tools/fetch_map_images.py    # 把 90 张底图下载到 site/assets/maps/（本地托管，可断点续传）
+python tools/build_maps.py          # 兼容旧版：Excel/表格形式的地图数据
+# 重建 maps.js（底图本地路径 + 5 个图层），无 Python 也能跑：
+node tools/rebuild_maps.cjs
 ```
 
 > 注意顺序：`link_quests.py` 必须在 `link_names.py` 之前跑，否则已经标注的 `[[任务:…]]` 不会被保护。
+
+本地预览（任一方式）：
+
+```bash
+node tools/serve.cjs 8899           # Node 版静态服务器
+python -m http.server 8899          # 或 Python 版（在 site/ 目录下执行）
+```
 
 测试：
 
