@@ -9,7 +9,7 @@ const html = fs.readFileSync(path.join(SITE, "index.html"), "utf8").replace(/<sc
 const dom = new JSDOM(html, { url: "http://127.0.0.1:8899/index.html" + hash, pretendToBeVisual: true });
 const { window } = dom;
 const { document } = window;
-const files = ["data/index.js", "data/quests.js", "data/chapters.js", "data/systems.js", "data/codex.js", "data/extras.js", "data/mag.js", "assets/app.js"];
+const files = ["data/index.js", "data/quests.js", "data/chapters.js", "data/systems.js", "data/codex.js", "data/extras.js", "data/mag.js", "data/maps.js", "assets/map.js", "assets/app.js"];
 for (const f of files) {
   const code = fs.readFileSync(path.join(SITE, f), "utf8");
   const mm = (window.matchMedia && window.matchMedia.bind(window)) || function () { return { matches: false, addListener() {}, removeListener() {} }; };
@@ -22,6 +22,17 @@ const objs = (view.innerHTML.match(/\[object Object\]/g) || []).length;
 console.log("[object Object] 次数:", objs);
 console.log("note-h 标签:", view.querySelectorAll(".note-h").length, "| 首个:", (view.querySelector(".note-h") || {}).textContent);
 console.log("details:", view.querySelectorAll("details").length, "| .qlink:", view.querySelectorAll(".qlink").length);
+const mapHost = view.querySelector("[data-map-host]");
+if (mapHost) {
+  console.log("地图卡片:", !!mapHost.querySelector(".mapcard"),
+    "| 区域按钮:", mapHost.querySelectorAll(".map-areas .chip").length,
+    "| 地图按钮:", mapHost.querySelectorAll(".map-maps .chip").length);
+  const st = mapHost.querySelector(".map-status");
+  console.log("状态行:", st ? JSON.stringify(st.textContent.slice(0, 90)) : "无");
+  const areas = Array.prototype.map.call(mapHost.querySelectorAll(".map-areas .chip"), (c) => c.textContent.trim());
+  console.log("识别区域:", areas.join(" / ").slice(0, 120));
+}
+console.log("L 存在:", typeof window.L, "| X2Map:", typeof window.X2Map);
 const body = view.querySelector("details .acc-body");
 console.log("acc-body:", body ? body.innerHTML.length : "无");
 if (body) {

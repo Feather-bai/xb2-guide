@@ -40,7 +40,7 @@ site/
 ## 模块
 
 1. **首页** — 快速入口
-2. **主线流程** — 第一至最终章，支线可点击浮窗
+2. **主线流程** — 第一至最终章；每章流程上方带**互动地图**（可拖动缩放、按区域切换、筛选标记点），支线可点击浮窗
 3. **任务库** — 166 条主线 / 普通 / 异刃 / DLC 任务，可按分类与关键词筛选
 4. **系统与养成** — 新手入门、战斗系统详解、异刃系统、角色养成、佣兵团、TigerTiger 与花的定制、打捞与经济、状态效果、**DLC 补完计划**、**《黄金之国伊拉》前传攻略**
 5. **图鉴** — 名称一键跳 wiki
@@ -48,6 +48,17 @@ site/
 7. **原刊对照** — 68 页原图 + OCR 文本
 8. **攻略差异对照** — 各版本分歧集中对照
 9. **资料来源与说明**
+
+## 互动地图
+
+每章「流程步骤」上方会插入一张对照地图，数据全部来自 wiki：
+
+- **底图**：wiki 的 90 张地图原图（`JSON:Mapinfo/*` 提供 `Name / mapName / menuGroup / Width / Height / LowerX…UpperZ`），按需从 `images.xenoblade2.cn` 加载，不占用仓库体积。
+- **标记点**：SMW 中带坐标（`PosX / PosZ`）的**宝箱 475 个**与**采集点 854 个**，按 `Areas` 归到各地图。
+- **区域与地图**：根据本章正文里出现的地名自动识别区域，再列出该区域的所有地图；章节地点列表里出现的区域会被优先选中。
+- **交互**：Leaflet（`CRS.Simple` + `imageOverlay`）实现拖动 / 滚轮缩放，标记类型（宝箱 / 采集点）可开关，支持按名称筛选标记点，点标记弹出详情并可跳 wiki 原页。
+
+> 坐标换算沿用 wiki 的规则：`bounds = [[-LowerZ, -LowerX], [-UpperZ, -UpperX]]`，标记点位置为 `[-PosZ, -PosX]`。
 
 ## 本地预览
 
@@ -79,12 +90,20 @@ python tools/link_quests.py         # 把正文里的任务名标注成可点击
 python tools/link_names.py          # 把异刃/道具/敌人/地标名标注成跳转 wiki 的外链
 ```
 
+互动地图的数据另有两步（依赖 wiki 的 JSON 地图元数据，需要联网）：
+
+```bash
+python tools/fetch_mapdata.py       # 抓 JSON:Mapinfo/* 与 JSON:FLD maplist/*
+python tools/fetch_markers.py       # 按地图抓带坐标的宝箱 / 采集点（约 180 次请求，可断点续传）
+python tools/build_maps.py          # maps.js（90 张底图 + 1329 个标记点 + 区域索引）
+```
+
 > 注意顺序：`link_quests.py` 必须在 `link_names.py` 之前跑，否则已经标注的 `[[任务:…]]` 不会被保护。
 
 测试：
 
 ```bash
-node tools/test_site.cjs    # 32 项 jsdom 冒烟测试（路由 / 浮窗 / 搜索 / 图鉴 / 图片 / DLC 标记）
+node tools/test_site.cjs    # 52 项 jsdom 冒烟测试（路由 / 浮窗 / 搜索 / 图鉴 / 图片 / DLC / 互动地图）
 node tools/check_links.cjs  # 站内链接、任务链接与资源引用检查
 ```
 

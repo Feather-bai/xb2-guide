@@ -19,7 +19,7 @@ function ok(name, cond, extra) {
 }
 
 // 注入数据与脚本（顺序与 index.html 一致）
-const jsFiles = ["data/index.js", "data/quests.js", "data/chapters.js", "data/systems.js", "data/codex.js", "data/extras.js", "data/mag.js", "assets/app.js"];
+const jsFiles = ["data/index.js", "data/quests.js", "data/chapters.js", "data/systems.js", "data/codex.js", "data/extras.js", "data/mag.js", "data/maps.js", "assets/map.js", "assets/app.js"];
 for (const f of jsFiles) {
   const code = fs.readFileSync(path.join(SITE, f), "utf8");
   try {
@@ -121,6 +121,31 @@ for (const c of X2.chapters || []) {
 ok("所有章节都没有 [object Object]", objLeak === 0, objLeak + " 处");
 ok("章节要点渲染出标题", keypointTitles > 0, keypointTitles + " 个标题");
 ok("要点/备注没有空内容", emptyNotes === 0, emptyNotes + " 处");
+
+// 互动地图：章节页应挂上地图卡片（含区域 / 地图 / 标记类型切换与搜索）
+ok("地图数据：90 张地图", ((X2.mapsData || {}).maps || []).length === 90, "得到 " + (((X2.mapsData || {}).maps) || []).length);
+ok("地图数据：区域索引", Object.keys((X2.mapsData || {}).areas || {}).length >= 15,
+   Object.keys((X2.mapsData || {}).areas || {}).length + " 个区域");
+const mapMarkers = ((X2.mapsData || {}).maps || []).reduce((n, m) => n + (m.tbox || []).length + (m.colle || []).length, 0);
+ok("地图数据：标记点数量", mapMarkers > 1000, mapMarkers + " 个");
+window.location.hash = "#/story/ch2";
+window.dispatchEvent(new window.Event("hashchange"));
+const mapHost = view.querySelector("[data-map-host]");
+ok("章节页有地图挂载点", !!mapHost);
+if (mapHost) {
+  ok("地图卡片已渲染", !!mapHost.querySelector(".mapcard"));
+  ok("地图区域切换按钮", mapHost.querySelectorAll(".map-areas .chip").length > 0,
+     mapHost.querySelectorAll(".map-areas .chip").length + " 个区域");
+  ok("地图切换按钮", mapHost.querySelectorAll(".map-maps .chip").length > 0,
+     mapHost.querySelectorAll(".map-maps .chip").length + " 张地图");
+  ok("标记类型筛选按钮", mapHost.querySelectorAll(".map-types .map-type").length === 2);
+  ok("标记搜索框", !!mapHost.querySelector(".map-search"));
+  ok("地图状态行显示标记数", /显示\s*\d+/.test(mapHost.querySelector(".map-status").textContent),
+     (mapHost.querySelector(".map-status").textContent || "").slice(0, 60));
+  // 第二章应识别出古拉等区域
+  const areaNames = Array.prototype.map.call(mapHost.querySelectorAll(".map-areas .chip"), (c) => c.textContent.trim());
+  ok("第二章识别出古拉区域", areaNames.join(" ").indexOf("古拉") > -1, areaNames.join(" / ").slice(0, 80));
+}
 
 // 数据里不应该再把 <b> 之类的标记当成正文显示出来
 window.location.hash = "#/systems/build";

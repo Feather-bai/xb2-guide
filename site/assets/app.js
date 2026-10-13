@@ -293,6 +293,9 @@
       h.push("<h2>本章要点</h2>" + ch.keypoints.map(function (k) { return renderable(k, { defaultKind: "tip" }); }).join(""));
     }
 
+    // 互动地图：挂在「流程步骤」上方，对照流程查看位置
+    h.push('<div class="map-host" data-map-host="' + esc(ch.id) + '"></div>');
+
     if (ch.steps && ch.steps.length) {
       h.push("<h2>流程步骤</h2><ol class=\"steps\">");
       ch.steps.forEach(function (s) {
@@ -575,6 +578,8 @@
       if (nl) nl.classList.add("active");
     }
     document.title = (mod && top !== "home" ? mod.title + " · " : "") + "异度之刃2 完整攻略站";
+    // 挂载互动地图（仅章节页有 map-host）
+    if (window.X2Map && window.X2Map.mountChapters) window.X2Map.mountChapters();
     window.scrollTo({ top: 0, behavior: "instant" in document.documentElement.style ? "instant" : "auto" });
     toggleNav(false);
   }
