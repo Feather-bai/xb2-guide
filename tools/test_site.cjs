@@ -152,6 +152,20 @@ if (mapHost) {
   // 第二章应识别出古拉等区域
   const areaNames = Array.prototype.map.call(mapHost.querySelectorAll(".map-areas .chip"), (c) => c.textContent.trim());
   ok("第二章识别出古拉区域", areaNames.join(" ").indexOf("古拉") > -1, areaNames.join(" / ").slice(0, 80));
+  // 标记点坐标不能左右镜像：lng 必须与 PosX 正相关（wiki/app 都是 (PosX-LowerX)/W 方向）
+  const ML = window.X2Map && window.X2Map.markerLatLng;
+  ok("导出了 markerLatLng", !!ML);
+  if (ML) {
+    const m0 = (X2.mapsData.maps || []).find((m) => m.colle.length > 3) || (X2.mapsData.maps || [])[0];
+    const pts = m0.colle;
+    const xs = pts.map((p) => p.x), lngs = pts.map((p) => ML(m0, p)[1]);
+    const mean = (a) => a.reduce((s, v) => s + v, 0) / a.length;
+    const mx = mean(xs), ml = mean(lngs);
+    let num = 0, dx = 0, dl = 0;
+    for (let i = 0; i < xs.length; i++) { num += (xs[i] - mx) * (lngs[i] - ml); dx += (xs[i] - mx) ** 2; dl += (lngs[i] - ml) ** 2; }
+    const corr = num / Math.sqrt(dx * dl);
+    ok("标记点 X 方向未镜像（lng 与 PosX 正相关）", corr > 0.9, "corr=" + corr.toFixed(3) + "（镜像时会 <0）");
+  }
 }
 
 // 数据里不应该再把 <b> 之类的标记当成正文显示出来

@@ -154,6 +154,15 @@
     return "https://xenoblade2.cn/" + encodeURIComponent(String(title).replace(/ /g, "_"));
   }
 
+  /* 标记点 (PosX, PosZ) -> Leaflet [lat, lng]，完全照搬 wiki 前端（Xb2map.js）的换算。
+     底图 bounds 为 [[-LowerZ,-LowerX],[-UpperZ,-UpperX]]，图像左边缘 = lng -UpperX；
+     取 XOffset = LowerX + UpperX，则 lng = PosX - XOffset 让 PosX=LowerX 落在左边缘、随 PosX 单调右移。
+     注意：不能写成 lng = -PosX，那会让所有标记点左右镜像（曾出现过这个 bug）。 */
+  function markerLatLng(m, pt) {
+    var b = m.b;
+    return [-pt.z, pt.x - b[0] - b[2]];
+  }
+
   /**
    * 渲染一个章节的地图卡片
    * @param {object} chapter 章节对象
@@ -298,7 +307,7 @@
     }
 
     function boundsOf(m) {
-      // wiki 的换算：左下 (LowerX, LowerZ)、右上 (UpperX, UpperZ)，取负后作为 [lat, lng]
+      // 底图边界：左下 (LowerX, LowerZ)、右上 (UpperX, UpperZ)，取负后作为 [lat, lng]
       var b = m.b;
       return [[-b[1], -b[0]], [-b[3], -b[2]]];
     }
@@ -386,7 +395,7 @@
     }
 
     function makeMarker(pt, meta, icon) {
-      var mk = window.L.marker([-pt.z, -pt.x], { icon: icon, title: pt.t || "", riseOnHover: true, x2pt: pt, x2meta: meta });
+      var mk = window.L.marker(markerLatLng(MAPS[state.id] || {}, pt), { icon: icon, title: pt.t || "", riseOnHover: true, x2pt: pt, x2meta: meta });
       // 用函数形式的 content：内容在悬停/点击时才生成，几百个点也能秒开
       mk.bindTooltip(function (l) { return markerTip(l.options.x2pt, l.options.x2meta); }, { direction: "top", offset: [0, -8] });
       mk.bindPopup(function (l) { return popupHtml(l.options.x2pt, l.options.x2meta); });
@@ -494,5 +503,5 @@
     });
   }
 
-  window.X2Map = { renderChapterMap: renderChapterMap, mountChapters: mountChapters, detectAreas: detectAreas, MAPS: MAPS };
+  window.X2Map = { renderChapterMap: renderChapterMap, mountChapters: mountChapters, detectAreas: detectAreas, MAPS: MAPS, markerLatLng: markerLatLng };
 })();
