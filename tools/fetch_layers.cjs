@@ -15,11 +15,9 @@ const fs = require("fs");
 const path = require("path");
 const https = require("https");
 
-const WS = path.join(__dirname, "..");
-const SRC = path.join(WS, ".extract", "mapdata");
+const { WS, SRC, APK_DB } = require("./paths.cjs");
 const API = "https://xenoblade2.cn/api.php";
 const UA = { "User-Agent": "Mozilla/5.0 (compatible; guide-archiver/1.0)" };
-const APK_DB = "C:/Users/ZhuanZ/Desktop/work/xb2-apk/extracted/assets/xenoblade2.db";
 const LIMIT = 2000;
 
 function get(url) {
@@ -85,17 +83,32 @@ async function main() {
   }
   console.log("  掉落表", Object.keys(colleDetail).length, "（覆盖采集点", colle.filter((c) => colleDetail[c.type]).length, "/", colle.length, "）");
 
-  // ---------- 4) 打捞点（Gmk 坐标 + SalvagePoint 名称） ----------
+  // ---------- 4) 打捞点（Gmk 坐标 + SalvagePoint 名称 / 掉落物） ----------
   console.log("打捞点…");
   const gmkSalvage = await jsonPage("Gmk/salvage");
   const salvage = [];
+  const salvageItems = {};        // 打捞点 gmk id -> [可在该点捞到的道具名]
   for (const e of gmkSalvage) {
     const it = { t: e.Name, x: +(+e.PosX).toFixed(3), z: +(+e.PosZ).toFixed(3), a: (e.areas || []).filter(Boolean) };
-    try { const d = await jsonPage("SalvagePoint/" + e.Name.replace(/_/g, " ")); if (d && d.SalvagePointName) it.n = d.SalvagePointName; } catch (err) {}
+    try {
+      const d = await jsonPage("SalvagePoint/" + e.Name.replace(/_/g, " "));
+      if (d && d.SalvagePointName) it.n = d.SalvagePointName;
+      const items = new Set();
+      for (let i = 1; i <= 5; i++) {
+        const tbl = d && d["SalvageTable" + i];
+        if (!tbl || typeof tbl !== "object") continue;
+        for (const k of Object.keys(tbl)) {
+          const c = tbl[k];
+          if (!c || typeof c !== "object") continue;
+          for (let j = 1; j <= 8; j++) { const nm = c["itm" + j + "ID"]; if (nm) items.add(nm); }
+        }
+      }
+      if (items.size) salvageItems[e.Name] = Array.from(items);
+    } catch (err) { /* 没有该页就跳过 */ }
     salvage.push(it);
     await sleep(60);
   }
-  console.log("  打捞点", salvage.length, "（有名称", salvage.filter((s) => s.n).length, "）");
+  console.log("  打捞点", salvage.length, "（有名称", salvage.filter((s) => s.n).length, "，有掉落物", Object.keys(salvageItems).length, "）");
 
   // ---------- 5) 敌人（Gmk 坐标 + EnemyGmkMap / EnemyIdMap 名称） ----------
   console.log("敌人…");
@@ -139,7 +152,7 @@ async function main() {
   }
   console.log("  NPC", npc.length, "（有名称", npc.filter((n) => n.n).length, "）");
 
-  const out = { tbox: tbox, colle: colle, salvage: salvage, enemy: enemy, npc: npc, colleDetail: colleDetail };
+  const out = { tbox: tbox, colle: colle, salvage: salvage, enemy: enemy, npc: npc, colleDetail: colleDetail, salvageItems: salvageItems };
   fs.writeFileSync(path.join(SRC, "layers.json"), JSON.stringify(out), "utf8");
   console.log("\n=== 汇总 ===");
   for (const k of ["tbox", "colle", "salvage", "enemy", "npc"])

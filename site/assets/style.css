@@ -182,7 +182,15 @@ html[data-theme="light"] .qlink:hover{color:#7a5300}
 .qlink.enemy{color:#ffb1a8;border-bottom-color:color-mix(in srgb,var(--accent-2) 50%,transparent)}
 .qlink.enemy::after{content:"↗";font-size:.78em}
 .qlink.term{color:var(--fg);border-bottom-color:var(--line)}
-.qlink.term::after{content:"?";font-size:.72em}
+/* 地标/关键词也是跳 wiki 的外链，统一用 ↗（以前是「?」，看起来像报错） */
+.qlink.term::after{content:"↗";font-size:.78em}
+/* 互动地图深链：NPC / 可采集道具名 -> 跳地图定位 */
+.qlink.maplink{color:#9fe6c4;border-bottom-color:color-mix(in srgb,#5ddc9a 55%,transparent)}
+.qlink.maplink.npc{color:#d9b8ff;border-bottom-color:color-mix(in srgb,#c792ea 55%,transparent)}
+.qlink.maplink::after{content:"◎";font-size:.8em;opacity:.85}
+/* 名词旁边另附的 wiki 小外链 */
+.qlink.wiki-mini{font-size:.78em;opacity:.6;margin-left:1px;color:var(--fg-mute);border-bottom:0}
+.qlink.wiki-mini::after{content:""}
 
 /* 步骤 / 时间线 */
 .steps{list-style:none;margin:0;padding:0;position:relative}
@@ -393,6 +401,32 @@ figcaption{font-size:12.4px;color:var(--fg-mute);margin-top:5px}
 .map-areas .chip.active,.map-areas .chip.blue,.map-maps .chip.blue{background:var(--accent);border-color:var(--accent);color:#04121a;font-weight:650}
 .chip-n{opacity:.7;font-variant-numeric:tabular-nums;font-size:11px}
 .map-filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:2px 0 8px}
+/* 搜索命中：可跳转的道具 / NPC / 任务接取点 */
+.map-hits{border:1px solid var(--line);border-radius:var(--radius-s);background:var(--card-2);padding:8px 10px;margin:0 0 9px;max-height:230px;overflow:auto}
+.hits-g{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:5px 10px;margin-bottom:7px}
+.hits-g h5{grid-column:1/-1;margin:2px 0 3px;font-size:11.4px;color:var(--fg-mute);font-weight:600;letter-spacing:.03em}
+.hit{display:flex;gap:6px;align-items:baseline;justify-content:space-between;text-align:left;cursor:pointer;
+  background:var(--card);border:1px solid var(--line);border-radius:8px;padding:5px 9px;font:inherit;font-size:13px;color:var(--fg)}
+.hit:hover{border-color:var(--accent);color:var(--accent)}
+.hit-n{font-weight:600}
+.hit-s{font-size:11.4px;color:var(--fg-mute)}
+/* 多位置选择弹层 */
+.x2picker{position:fixed;inset:0;z-index:90;display:grid;place-items:center;background:rgba(4,10,20,.6);padding:16px}
+.x2picker-panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px;max-width:420px;width:100%;box-shadow:var(--shadow)}
+.x2picker-panel h4{margin:0 0 10px;font-size:14px;font-weight:600}
+.x2picker-list{display:flex;flex-direction:column;gap:6px;max-height:46vh;overflow:auto;margin-bottom:10px}
+.qlink.maplink.quest{color:#ffcf9a;border-bottom-color:color-mix(in srgb,#ffa94d 55%,transparent)}
+.qlink.maplink.enemy{color:#ffb1a8;border-bottom-color:color-mix(in srgb,#ff6b6b 55%,transparent)}
+/* 任务流程：攻略流程 / 官方目标 切换 */
+.flowtabs{display:inline-flex;gap:4px;margin-left:8px;vertical-align:.05em}
+.flowtab{cursor:pointer;background:var(--card-2);border:1px solid var(--line);border-radius:999px;
+  padding:1px 10px;font:inherit;font-size:11.6px;color:var(--fg-mute)}
+.flowtab.on{background:var(--accent);border-color:var(--accent);color:#04121a;font-weight:650}
+.flowpane[hidden]{display:none}
+.flowk{display:inline-block;min-width:2.6em;text-align:center;margin-right:6px;padding:0 6px;
+  border-radius:5px;background:var(--card-2);border:1px solid var(--line);font-size:11px;color:var(--accent)}
+.flowd{color:var(--fg-mute);font-size:12.2px;margin-top:2px}
+.flowhint{margin:8px 0 0;font-size:11.8px;color:var(--fg-mute)}
 .map-types .map-type{opacity:.5}
 .map-types .map-type.on{opacity:1}
 .map-types .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:.05em}
@@ -400,14 +434,22 @@ figcaption{font-size:12.4px;color:var(--fg-mute);margin-top:5px}
   flex:1;min-width:130px;background:var(--card-2);border:1px solid var(--line);border-radius:9px;
   padding:7px 11px;color:var(--fg);font-size:14px;
 }
+/* Leaflet 内部的 z-index 高达 400~1000（.leaflet-top 是 1000），而 .map-canvas 原本
+   z-index:auto、不构成层叠上下文，这些值就直接拿到页面级别去和浮窗比大小
+   （modal 60 / search 70 / picker 90…），把任务浮窗压在了地图下面。
+   给 .map-canvas 一个 z-index:0 让它自成层叠上下文，内部层级就再也影响不到页面浮层。 */
 .map-canvas{
-  position:relative;height:340px;border-radius:var(--radius-s);overflow:hidden;
+  position:relative;z-index:0;height:340px;border-radius:var(--radius-s);overflow:hidden;
   border:1px solid var(--line);background:#0a1526;
 }
 html[data-theme="light"] .map-canvas{background:#dde6f2}
 .map-canvas .leaflet-container{background:transparent;font-family:inherit}
 .x2map-img{image-rendering:auto}
 .map-status{font-size:12.4px;color:var(--fg-mute);margin-top:7px}
+/* 任务接取点「只看本章 / 显示全部」开关 */
+.qfilter{margin-left:5px;cursor:pointer;background:var(--card-2);border:1px solid var(--line);
+  border-radius:999px;padding:1px 9px;font:inherit;font-size:11.6px;color:var(--accent)}
+.qfilter:hover{border-color:var(--accent)}
 .map-empty{color:var(--fg-mute);font-size:13.6px;padding:12px 2px}
 .x2map-marker span{
   display:grid;place-items:center;width:18px;height:18px;border-radius:50%;
@@ -417,6 +459,10 @@ html[data-theme="light"] .map-canvas{background:#dde6f2}
 /* 密集图层（敌人 / NPC）用小圆点，减少遮挡 */
 .x2map-marker.dot span{width:9px;height:9px;font-size:0;border-width:1px}
 .x2map-marker.dot span.sq{border-radius:2px}
+/* 深链定位到的标记：高亮圈 + 放大脉冲，周围同类点很多时也能一眼看到 */
+.x2hl{animation:x2pulse 1.1s ease-out 3}
+@keyframes x2pulse{0%{stroke-opacity:1}50%{stroke-opacity:.25}100%{stroke-opacity:1}}
+.x2map-marker.x2hit span{box-shadow:0 0 0 3px rgba(255,209,102,.9),0 1px 6px rgba(0,0,0,.6);z-index:1}
 /* 该地图没有的图层：置灰不可点（类名不能叫 empty，会撞上全局 .empty 空状态样式） */
 .map-types .map-type.no-data{opacity:.32;cursor:not-allowed}
 .map-types .map-type.no-data .chip-n{display:none}

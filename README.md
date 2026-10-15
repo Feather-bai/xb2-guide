@@ -60,10 +60,16 @@ site/
   | 宝箱 | 663 | SMW（坐标 + 内容 / 金币 / 场景技能） | 开 |
   | 采集点 | 1523 | SMW（坐标 + 类型）+ `[[采集物::+]]` 掉落表 | 开 |
   | 打捞点 | 61 | `JSON:Gmk/salvage` + `JSON:SalvagePoint/*`（名称） | 开 |
+  | 任务接取点 | 126 | APK 的任务→NPC 映射 + wiki `Gmk/npc` 坐标 | 开 |
   | 敌人 | 4238 | `JSON:Gmk/enemy` + `EnemyGmkMap`/`EnemyIdMap`（名称、出现时段 / 天气） | 关 |
   | NPC | 2067 | `JSON:Gmk/npc` + APK 数据库（中文名，覆盖约 35%） | 关 |
 
   弹窗按类型展示：宝箱「宝箱：编号 + 内容 / 金币 / 场景技能」，采集点「采集点：类型名 + 掉落表（道具 + 概率）」，打捞点「打捞点：名称」，敌人「敌人：名称 + 出现时段 / 天气」，NPC「NPC：名称」；都带跳 wiki 的链接，不显示坐标。
+
+- **名词深链**：任务流程 / 系统页 / 地图页正文里出现的 **NPC 名**、**敌人名**、**可采集道具名**（`mapsData.npcIndex` / `enemyIndex` / `itemIndex`）会自动变成可点按钮（NPC 紫色、敌人红色、道具绿色，带 ◎ 标记）。点一下会跳到对应章节的互动地图、打开相应图层、把标记点居中并弹出气泡。**一个名字能在多处出现时，会先弹出选择列表让你挑一个位置**。反向索引由 `rebuild_maps.cjs` 生成。为避免误伤，**自动链接只认 3 字以上的名字**（2 字名如「夏尔」会命中「哈达夏尔」、角色名「灭 / 真 / 齐格」也会和敌人重名，需要时用显式 `[[NPC:名]]` / `[[敌人:名]]` / `[[物品:名]]` 标注）。
+- **任务接取点**：每张地图上标出发该地图支线任务的 NPC 位置（橙色 `!`），点开显示任务名与委托人，可一键跳任务详情。**默认只显示当前章节解锁的任务**（状态行有「显示全部 / 只看本章」开关），避免每张图都堆满好几章之后的任务。数据由 `tools/fetch_quest_points.cjs` 生成——用 APK 的「任务→发布 NPC」映射与 `available_chapter`（解锁章节），再去 wiki 的 `Gmk/npc` 取**同坐标系**的坐标（APK 自带的 `world_z` 有 0~66 的漂移，不能用）。任务浮窗的「基本信息」里也有「在互动地图上查看」按钮。
+- **地图内搜索**：搜索框除了筛当前地图的标记点，还会在下方列出匹配的**道具获取点 / NPC / 敌人 / 任务接取点**，点一下直接跳转定位。
+- **任务流程双口径**：任务浮窗的「任务流程」有两个标签页——**攻略流程**（整理自攻略本，步骤更细）与**官方目标**（游戏内任务界面的原文，来自手机版 wiki 的 `task_workflow_step`，带「对话 / 前往 / 战斗 / 收集 / 条件 / 机关」分类与地点说明）。两者口径不同故并列而非互相覆盖；只有一边有数据时不显示切换按钮。官方目标由 `tools/fetch_quest_flows.cjs` 生成（146 个任务 / 1012 步）。
 
   > 旧版只抓了宝箱 475 + 采集点 854，因为脚本把 SMW 的 `limit=50` 写死在请求里。**SMW 的「查询级 limit」其实可达 2000**（offset 分页仍然无效），改成 `|limit=2000` 一次即可取全。敌人 / NPC 数据密集，默认不勾选，勾选后自动聚合（markercluster）。
 - **区域与地图**：根据本章正文里出现的地名自动识别区域，再列出该区域的所有地图；章节地点列表里出现的区域会被优先选中。地图条按 `menuGroup` 分组，标签只留序号（`格尔特蒙特 f01/f03` → 格尔特蒙特1 / 格尔特蒙特3，`托里格镇 c_01` → 托里格镇1），一行放不下时自动换行；与主图同尺寸的 `_shipoff / lodoff` 重复变体会被剔除，DLC「黄金之国」地图单独归入一个区域。
@@ -101,17 +107,23 @@ python tools/link_quests.py         # 把正文里的任务名标注成可点击
 python tools/link_names.py          # 把异刃/道具/敌人/地标名标注成跳转 wiki 的外链
 ```
 
-互动地图的数据另有两步（依赖 wiki 的 JSON 地图元数据，需要联网）：
+互动地图的数据（依赖 wiki 的 JSON 地图元数据与 Gmk 数据，需要联网）：
 
 ```bash
-python tools/fetch_mapdata.py       # 抓 JSON:Mapinfo/* 与 JSON:FLD maplist/*
-python tools/fetch_markers.py       # 兼容旧版：按地图抓带坐标的宝箱 / 采集点
-python tools/fetch_layers.cjs       # 抓 5 个图层（JSON:Gmk/*）+ SMW 补宝箱 / 采集点详情
-python tools/fetch_map_images.py    # 把 90 张底图下载到 site/assets/maps/（本地托管，可断点续传）
-python tools/build_maps.py          # 兼容旧版：Excel/表格形式的地图数据
-# 重建 maps.js（底图本地路径 + 5 个图层），无 Python 也能跑：
-node tools/rebuild_maps.cjs
+python tools/fetch_mapdata.py       # 抓 JSON:Mapinfo/* 与 JSON:FLD maplist/*，并解析底图真实 URL
+node tools/fetch_layers.cjs         # 抓 6 个图层（宝箱 / 采集点 / 打捞点 / 敌人 / NPC + 采集掉落）
+node tools/fetch_quest_points.cjs   # 任务接取点（APK 的任务→NPC 映射 + wiki 坐标）
+node tools/fetch_quest_flows.cjs    # 官方任务目标（APK task_workflow_step）→ data/questflows.js
+node tools/fetch_map_images.cjs     # 把 90 张底图下载到 site/assets/maps/（本地托管，可断点续传）
+node tools/rebuild_maps.cjs         # 重建 maps.js（本地底图 + 6 个图层 + 反向索引）
+node tools/check_map_images.cjs     # 校验 90 张底图是否齐全
 ```
+
+> `fetch_layers.cjs` / `fetch_quest_points.cjs` / `fetch_quest_flows.cjs` 需要解包后的
+> `xenoblade2.db`（提供 NPC 名称、任务目标等）。脚本会在仓库内及常见位置自动查找，
+> 也可用环境变量指定：`XB2_APK_DB=<路径>`；仓库根目录可用 `XB2_WORKSPACE=<路径>` 覆盖。
+>
+> `rebuild_maps.cjs` 的输出是确定性的：同样的输入会生成完全相同的 `maps.js`。
 
 > 注意顺序：`link_quests.py` 必须在 `link_names.py` 之前跑，否则已经标注的 `[[任务:…]]` 不会被保护。
 
@@ -125,7 +137,7 @@ python -m http.server 8899          # 或 Python 版（在 site/ 目录下执行
 测试：
 
 ```bash
-node tools/test_site.cjs    # 52 项 jsdom 冒烟测试（路由 / 浮窗 / 搜索 / 图鉴 / 图片 / DLC / 互动地图）
+node tools/test_site.cjs    # jsdom 冒烟测试（路由 / 浮窗 / 搜索 / 图鉴 / 图片 / DLC / 互动地图）
 node tools/check_links.cjs  # 站内链接、任务链接与资源引用检查
 ```
 

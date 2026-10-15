@@ -49,31 +49,92 @@
       return esc(String(text));
     }
     var out = esc(text);
-    // **加粗** -> <strong>（数据里的重点标记）
-    out = out.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
-    // [[...]] 显式标注
+    // **加粗** 与 [[...]] 先换成占位符，这样后面的「名词自动链接」只会作用在纯文本上，不会破坏标签
+    var tokens = [];
+    function stash(html) { tokens.push(html); return "" + (tokens.length - 1) + ""; }
+
+    out = out.replace(/\*\*([^*]+)\*\*/g, function (_, t) { return stash("<strong>" + t + "</strong>"); });
     out = out.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, function (_, target, label) {
       var show = label || target.split(":").pop();
       var ns = target.indexOf(":") > -1 ? target.split(":")[0] : "";
-      if (ns === "任务") {
-        return '<button class="qlink" type="button" data-quest="' + esc(show) + '">' + esc(show) + "</button>";
+      if (ns === "任务") return stash('<button class="qlink" type="button" data-quest="' + esc(show) + '">' + esc(show) + "</button>");
+      if (ns === "NPC" && canLocate(show)) return stash(mapLinkHTML(show));
+      if ((ns === "敌人" || ns === "珍稀种") && canLocate(show)) return stash(mapLinkHTML(show));
+      if (ns === "地标" || ns === "物品" || ns === "饰品" || ns === "辅助核心") {
+        var kind = ns === "地标" ? "term" : "item";
+        var wiki = '<a class="qlink ' + kind + '" href="' + esc(wikiUrl(target)) + '" target="_blank" rel="noopener">' + esc(show) + "</a>";
+        // 能在互动地图上定位的，名字本身做成跳地图的按钮，另附一个 wiki 外链
+        if (canLocate(show)) return stash(mapLinkHTML(show) + '<a class="qlink wiki-mini" href="' + esc(wikiUrl(target)) + '" target="_blank" rel="noopener" title="在 wiki 查看">↗</a>');
+        return stash(wiki);
       }
-      var kind = ns === "异刃" ? "blade" : ns === "物品" || ns === "饰品" || ns === "辅助核心" ? "item" : ns === "敌人" || ns === "珍稀种" ? "enemy" : "term";
-      return '<a class="qlink ' + kind + '" href="' + esc(wikiUrl(target)) + '" target="_blank" rel="noopener">' + esc(show) + "</a>";
+      var k2 = ns === "异刃" ? "blade" : ns === "敌人" || ns === "珍稀种" ? "enemy" : "term";
+      return stash('<a class="qlink ' + k2 + '" href="' + esc(wikiUrl(target)) + '" target="_blank" rel="noopener">' + esc(show) + "</a>");
     });
     // 自动识别任务名（「」内优先）
     out = out.replace(/「([^」]{2,24})」/g, function (m, name) {
-      var idx = getLinkIndex();
-      if (idx.quest[name]) {
-        return "「<button class=\"qlink\" type=\"button\" data-quest=\"" + esc(name) + '">' + esc(name) + "</button>」";
-      }
+      if (getLinkIndex().quest[name]) return stash("「" + '<button class="qlink" type="button" data-quest="' + esc(name) + '">' + esc(name) + "</button>" + "」");
       return m;
     });
+    // 名词自动链接：任务流程里出现的 NPC / 敌人 / 可采集道具名 -> 跳互动地图对应位置。
+    // 两道闸门，避免「错误导向」：
+    //   1) 修饰语 + 通用名（「百发百中的火鸡人」而库里只有「火鸡人」）不链；
+    //   2) 只链**当前章节地图上真的能找到**的名字——本区域的任务不该把人带去别章的地图。
+    var lc = locNames();
+    if (lc.re) out = out.replace(lc.re, function (name, _g, off, whole) {
+      var prev = off > 0 ? whole.charAt(off - 1) : "";
+      if (/[的之]/.test(prev)) return name;      // 前面是修饰语，长名没被收录 -> 不链
+      var kind = lc.npcSet[name] ? "npc" : lc.enemySet[name] ? "enemy" : "item";
+      if (window.X2Map && window.X2Map.locatableHere && !window.X2Map.locatableHere(kind, name)) return name;
+      return stash(mapLinkHTML(name));
+    });
+    // 还原占位符
+    out = out.replace(new RegExp("([0-9]+)", "g"), function (_, i) { return tokens[+i]; });
     return out;
+  }
+
+  /* ---- 互动地图深链：NPC / 道具 名 -> 地图上的位置 ---- */
+  var locCache = null;
+  function escRe(s) { return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+  function locNames() {
+    if (locCache) return locCache;
+    var md = X2.mapsData || {};
+    var npc = Object.keys(md.npcIndex || {}).filter(function (n) { return n; });
+    var enemy = Object.keys(md.enemyIndex || {}).filter(function (n) { return n; });
+    var item = Object.keys(md.itemIndex || {}).filter(function (n) { return n; });
+    var npcSet = {}, enemySet = {};
+    npc.forEach(function (n) { npcSet[n] = 1; });
+    enemy.forEach(function (n) { enemySet[n] = 1; });
+    // 自动链接只认 3 字以上的名字：2 字名太容易误伤（如「夏尔」命中「哈达夏尔」、「特奥」命中「特奥斯奥莱」）。
+    // 极少数 2 字名可用显式 [[NPC:名]] / [[敌人:名]] / [[物品:名]] 标注。
+    var auto = npc.concat(enemy, item).filter(function (n) { return n.length >= 3; });
+    auto.sort(function (a, b) { return b.length - a.length; });   // 长名优先，避免短名抢先命中
+    locCache = { npcSet: npcSet, enemySet: enemySet, re: auto.length ? new RegExp("(" + auto.map(escRe).join("|") + ")", "g") : null };
+    return locCache;
+  }
+  function canLocate(name) {
+    var md = X2.mapsData || {};
+    return !!((md.npcIndex || {})[name] || (md.itemIndex || {})[name] || (md.enemyIndex || {})[name]);
+  }
+  function mapLinkHTML(name) {
+    var lc = locNames();
+    var kind = lc.npcSet[name] ? "npc" : lc.enemySet[name] ? "enemy" : "item";
+    return '<button type="button" class="qlink maplink ' + kind + '" data-mk="' + kind + '" data-mn="' + esc(name) +
+      '" title="在互动地图上定位">' + esc(name) + "</button>";
   }
 
   /* ---------------------------------------------------------------- 浮窗 */
   var modal = $("#modal"), modalBody = $("#modalBody"), lastFocus = null;
+
+  /* 轻提示（如「地图上找不到该位置」） */
+  var toastTimer = null;
+  function toast(msg) {
+    var t = $("#toast");
+    if (!t) return;
+    t.textContent = msg;
+    t.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.hidden = true; }, 2600);
+  }
 
   function openModal(node, title) {
     lastFocus = document.activeElement;
@@ -95,8 +156,29 @@
   }
   document.addEventListener("click", function (e) {
     if (e.target.closest("[data-close]")) { closeModal(); return; }
+    var ft = e.target.closest("[data-flow]");
+    if (ft) {
+      var want = ft.getAttribute("data-flow");
+      var sec = ft.closest(".m-sec");
+      sec.querySelectorAll(".flowtab").forEach(function (b) { b.classList.toggle("on", b === ft); });
+      sec.querySelectorAll(".flowpane").forEach(function (p) { p.hidden = p.getAttribute("data-pane") !== want; });
+      return;
+    }
     var q = e.target.closest("[data-quest]");
-    if (q) { e.preventDefault(); showQuest(q.getAttribute("data-quest")); }
+    if (q) { e.preventDefault(); showQuest(q.getAttribute("data-quest")); return; }
+    var mk = e.target.closest("[data-mk]");
+    if (mk) {
+      e.preventDefault();
+      closeModal();
+      var kind = mk.getAttribute("data-mk"), name = mk.getAttribute("data-mn");
+      var M = window.X2Map;
+      if (!M || !M.locateTargets) return;
+      var targets = M.locateTargets(kind, name);
+      if (!targets.length) { toast("互动地图上找不到「" + name + "」的位置"); return; }
+      // 有多个位置时先让用户选一个（常见于采集点/打捞点都能拿到的道具）
+      if (targets.length > 1) { M.openPicker(name, targets); return; }
+      M.focusMapTarget(kind, name, 0);
+    }
   });
   document.addEventListener("keydown", function (e) {
     if (e.key === "Escape") {
@@ -131,6 +213,9 @@
     if (q.npc) kv.push(["委托人", q.npc]);
     if (q.blade) kv.push(["对应异刃", q.blade]);
     if (q.cond) kv.push(["解锁条件", q.cond]);
+    // 有接取点数据时，给一个直接跳到互动地图的按钮（第 3 个元素 = 已经是 HTML，不要再转义）
+    if ((X2.mapsData || {}).questIndex && X2.mapsData.questIndex[q.name])
+      kv.push(["接取点", '<button type="button" class="qlink maplink quest" data-mk="quest" data-mn="' + esc(q.name) + '">在互动地图上查看</button>', true]);
     var reward = [];
     if (q.gold) reward.push(q.gold + " G");
     if (q.exp) reward.push("EXP " + q.exp);
@@ -141,11 +226,26 @@
     if (reward.length) kv.push(["报酬", reward.join("　")]);
     if (kv.length) {
       h.push('<div class="m-sec"><h4>基本信息</h4><dl class="kv">' +
-        kv.map(function (r) { return "<dt>" + esc(r[0]) + "</dt><dd>" + renderLinks(r[1]) + "</dd>"; }).join("") + "</dl></div>");
+        kv.map(function (r) { return "<dt>" + esc(r[0]) + "</dt><dd>" + (r[2] ? r[1] : renderLinks(r[1])) + "</dd>"; }).join("") + "</dl></div>");
     }
     if (q.flow && q.flow.length) {
-      h.push('<div class="m-sec"><h4>任务流程</h4><ol>' +
-        q.flow.map(function (s) { return "<li>" + renderLinks(s) + "</li>"; }).join("") + "</ol></div>");
+      var off = (X2.questFlows || {})[q.name];
+      if (off && off.length) {
+        h.push('<div class="m-sec"><h4>任务流程 <span class="flowtabs">' +
+          '<button type="button" class="flowtab on" data-flow="site">攻略流程</button>' +
+          '<button type="button" class="flowtab" data-flow="off">官方目标</button></span></h4>');
+        h.push('<ol class="flowpane" data-pane="site">' +
+          q.flow.map(function (s) { return "<li>" + renderLinks(s) + "</li>"; }).join("") + "</ol>");
+        h.push('<ol class="flowpane" data-pane="off" hidden>' +
+          off.map(function (s) {
+            return "<li>" + (s.k ? '<span class="flowk">' + esc(s.k) + "</span>" : "") + renderLinks(s.t) +
+              (s.d ? '<div class="flowd">' + renderLinks(s.d) + "</div>" : "") + "</li>";
+          }).join("") + "</ol>");
+        h.push('<p class="flowhint">「攻略流程」整理自攻略本，步骤更细；「官方目标」是游戏内任务界面的原文，两者口径不同，可对照查看。</p></div>');
+      } else {
+        h.push('<div class="m-sec"><h4>任务流程</h4><ol>' +
+          q.flow.map(function (s) { return "<li>" + renderLinks(s) + "</li>"; }).join("") + "</ol></div>");
+      }
     }
     if (q.notes && q.notes.length) {
       h.push('<div class="m-sec"><h4>注意事项</h4>' + q.notes.map(function (n) {

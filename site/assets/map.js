@@ -112,6 +112,14 @@
     salvage: { key: "salvage", label: "打捞点", color: "#4dd0e1", glyph: "⚓", on: true, prefix: "打捞点:" },
     enemy: { key: "enemy", label: "敌人", color: "#ff6b6b", glyph: "", dot: true, on: false, cluster: true, prefix: "敌人:" },
     npc: { key: "npc", label: "NPC", color: "#c792ea", glyph: "", dot: true, square: true, on: false, cluster: true, prefix: "NPC:" },
+    quest: { key: "quest", label: "任务接取点", color: "#ffa94d", glyph: "!", on: true },
+  };
+  /* 深链种类 -> 图层键 / 反向索引 / 提示前缀 */
+  var LINK_KINDS = {
+    npc: { layer: "npc", index: "npcIndex", label: "NPC" },
+    enemy: { layer: "enemy", index: "enemyIndex", label: "敌人" },
+    item: { layer: "colle", index: "itemIndex", label: "道具" },
+    quest: { layer: "quest", index: "questIndex", label: "任务接取点" },
   };
   var LAYER_KEYS = Object.keys(TYPE_META);
 
@@ -136,6 +144,20 @@
   }
 
   var uid = 0;
+  var MAP_INSTANCES = [];   // 已创建的地图实例（窗口尺寸变化时统一定位）
+  var resizeBound = false;
+  function bindResize() {
+    if (resizeBound) return;
+    resizeBound = true;
+    var t = null;
+    window.addEventListener("resize", function () {
+      clearTimeout(t);
+      t = setTimeout(function () {
+        MAP_INSTANCES = MAP_INSTANCES.filter(function (x) { return x.canvas.isConnected; });
+        MAP_INSTANCES.forEach(function (x) { try { x.map.invalidateSize(); } catch (e) {} });
+      }, 220);
+    });
+  }
 
   function el(tag, cls, html) {
     var d = document.createElement(tag);
@@ -164,6 +186,19 @@
   }
 
   /**
+   * 章节 -> 该章地图卡片会列出哪些地图（与 renderChapterMap 内一致）
+   * @returns {string[]} 地图 id 列表
+   */
+  function chapterMaps(chapter) {
+    var areas = detectAreas(chapter).filter(function (a) { return (AREA_MAPS[a] || []).length; });
+    var ids = [];
+    areas.forEach(function (a) {
+      (AREA_MAPS[a] || []).forEach(function (id) { if (ids.indexOf(id) === -1) ids.push(id); });
+    });
+    return ids;
+  }
+
+  /**
    * 渲染一个章节的地图卡片
    * @param {object} chapter 章节对象
    * @returns {HTMLElement}
@@ -180,13 +215,11 @@
     }
 
     // 该章节涉及的地图（保持区域顺序）
-    var mapIds = [];
-    areas.forEach(function (a) {
-      (AREA_MAPS[a] || []).forEach(function (id) { if (mapIds.indexOf(id) === -1) mapIds.push(id); });
-    });
+    var mapIds = chapterMaps(chapter);
 
     var firstId = mapIds[0];
-    var state = { id: firstId, types: defaultTypes(), key: "" };
+    // chap: 当前章节 id；questAll: 任务接取点是只看本章解锁的，还是全看
+    var state = { id: firstId, types: defaultTypes(), key: "", chap: chapter.id, questAll: false };
 
     box.innerHTML =
       '<div class="mapcard-head">' +
@@ -201,8 +234,9 @@
       "</div>" +
       '<div class="map-filters">' +
         '<div class="map-types"></div>' +
-        '<input class="map-search" type="search" placeholder="筛选标记点名称…">' +
+        '<input class="map-search" type="search" placeholder="筛选标记点 / 搜道具、NPC…">' +
       "</div>" +
+      '<div class="map-hits" hidden></div>' +
       '<div class="map-canvas"></div>' +
       '<div class="map-status"></div>';
 
@@ -210,11 +244,13 @@
     var mapBox = box.querySelector(".map-maps");
     var typeBox = box.querySelector(".map-types");
     var search = box.querySelector(".map-search");
+    var hitsBox = box.querySelector(".map-hits");
     var canvas = box.querySelector(".map-canvas");
     var status = box.querySelector(".map-status");
 
     var leafletMap = null;
     var layers = { markers: null };
+    var layerGroups = {};     // 图层键 -> 实际绘制的图层（可能是聚合层），深链时要用
     var node = "map-" + (++uid);
 
     function areaMaps(area) {
@@ -299,10 +335,37 @@
       if (!window.L) return null;
       leafletMap = window.L.map(canvas, {
         crs: window.L.CRS.Simple,
-        minZoom: -3, maxZoom: 3, zoomSnap: 0.25, zoomDelta: 0.5,
+        // zoomSnap 用 0：fitBounds 时取精确缩放，否则会被吸附到下一档，
+        // 瘦高的地图（如 ma10a_f02）会白白缩掉一截、显得很小
+        minZoom: -3, maxZoom: 3, zoomSnap: 0, zoomDelta: 0.5,
         attributionControl: true, doubleClickZoom: false, zoomControl: true,
+        // 自己处理弹窗平移（见下方 popupopen）：Leaflet 自带的 autoPan
+        // 对高弹窗推不到位，顶端会被画布裁掉，也会和手动拖动打架
+        autoPan: false,
       });
       window.L.control.scale({ imperial: false, metric: true }).addTo(leafletMap);
+      MAP_INSTANCES.push({ map: leafletMap, canvas: canvas });
+      bindResize();
+      // Leaflet 自带的 autoPan 对高弹窗推不到位（顶端被画布裁掉），这里在弹窗打开后自己校正。
+      // 弹窗是异步布局的，所以要重试几帧直到位置稳定。
+      leafletMap.on("popupopen", function (e) {
+        var tries = 0;
+        (function fix() {
+          var pop = e.popup && e.popup.getElement && e.popup.getElement();
+          if (!pop) return;
+          var cbox = canvas.getBoundingClientRect();
+          var pbox = pop.getBoundingClientRect();
+          if (!pbox.height) { if (++tries < 10) setTimeout(fix, 40); return; }
+          var dx = 0, dy = 0, m = 10;
+          if (pbox.left < cbox.left + m) dx = pbox.left - cbox.left - m;
+          else if (pbox.right > cbox.right - m) dx = pbox.right - cbox.right + m;
+          if (pbox.top < cbox.top + m) dy = pbox.top - cbox.top - m;
+          else if (pbox.bottom > cbox.bottom - m) dy = pbox.bottom - cbox.bottom + m;
+          if (dx || dy) { try { leafletMap.panBy([dx, dy], { animate: false }); } catch (err) {} }
+          if (++tries < 6) setTimeout(fix, 60);   // 再确认几帧（布局/动画可能又挪了）
+        })();
+      });
+      box._map = leafletMap;
       return leafletMap;
     }
 
@@ -312,26 +375,46 @@
       return [[-b[1], -b[0]], [-b[3], -b[2]]];
     }
 
+    /* 把视野对准整张地图。
+       必须在容器完成布局之后调用：容器还是 0×0 时 fitBounds 会算出退化的缩放级别，
+       被 minZoom 夹到 -3，整张图缩成一小块、也没法拖动（曾经的「自动居中 / 拖不动」根因）。 */
+    var fitPending = null;
+    var pendingFitId = null;
+    function fitToMap(map, b) {
+      map.invalidateSize();
+      if (map.getSize().x < 2) return false;    // 还没布局，等下一帧
+      map.fitBounds(b);
+      return true;
+    }
+
     function showMap() {
       var m = MAPS[state.id];
       if (!m) return;
       var map = ensureMap();
       var b = boundsOf(m);
       if (map) {
+        var sameMap = layers.imgMap === state.id;   // 切换图层时不要重置视野
         if (layers.img) map.removeLayer(layers.img);
         if (layers.markers) { map.removeLayer(layers.markers); layers.markers = null; }
         layers.img = window.L.imageOverlay(m.img, b, { className: "x2map-img" });
         layers.img.addTo(map);
-        map.fitBounds(b);
+        layers.imgMap = state.id;
+        if (!sameMap) { fitPending = b; pendingFitId = state.id; }   // 视图对齐交给下一帧（等容器布局完）
+        // 允许把地图任一点拖到画布中央：四周各留一个地图跨度，
+        // 否则靠近边缘的标记点弹窗会被画布裁掉、还拖不动（曾只外扩 40 单位）
+        var padX = Math.abs(b[1][1] - b[0][1]) || 100;
+        var padY = Math.abs(b[0][0] - b[1][0]) || 100;
         map.setMaxBounds([
-          [Math.min(b[0][0], b[1][0]) - 40, Math.min(b[0][1], b[1][1]) - 40],
-          [Math.max(b[0][0], b[1][0]) + 40, Math.max(b[0][1], b[1][1]) + 40],
+          [Math.min(b[0][0], b[1][0]) - padY, Math.min(b[0][1], b[1][1]) - padX],
+          [Math.max(b[0][0], b[1][0]) + padY, Math.max(b[0][1], b[1][1]) + padX],
         ]);
         map.attributionControl.setPrefix("");
         map.attributionControl._container.innerHTML =
           '底图与标记数据来自 <a href="https://xenoblade2.cn/" target="_blank" rel="noopener">乐园数据管理室</a>（CC BY-NC-SA 4.0）';
-        // 容器尺寸在插入 DOM 后才正确
-        setTimeout(function () { try { map.invalidateSize(); } catch (e) {} }, 60);
+        // 容器尺寸在插入 DOM 后才正确：布局完成后再对准视野
+        setTimeout(function () {
+          try { if (fitPending) { fitToMap(map, fitPending); fitPending = null; } else map.invalidateSize(); } catch (e) {}
+        }, 60);
       } else {
         canvas.innerHTML = '<img class="x2map-fallback" src="' + esc(m.img) + '" alt="' + esc(m.area) + '">' +
           '<div class="map-empty">地图库未加载，先显示底图。</div>';
@@ -349,9 +432,12 @@
 
       // 组装每个图层的待绘点（敌人 / NPC 这类密集图层用聚合层渲染）
       var groups = [];
+      layerGroups = {};
       LAYER_KEYS.forEach(function (t) {
         if (!state.types[t]) return;
         var pts = (m[t] || []).filter(function (p) {
+          // 任务接取点默认只显示本章解锁的（避免每张图都堆满几章后的任务）
+          if (t === "quest" && !state.questAll && p.c && p.c !== state.chap) return false;
           if (!key) return true;
           var hay = ((p.t || "") + " " + (p.n || "") + " " + (p.type || "")).toLowerCase();
           return hay.indexOf(key) > -1;
@@ -367,22 +453,43 @@
         groups.forEach(function (g) {
           var meta = TYPE_META[g.t];
           // 密集图层用聚合，避免几百个点挤在一起卡顿、也没法点
-          var useCluster = !!meta.cluster && g.pts.length > 60 && !!window.L.markerClusterGroup;
+          // 聚合可以关掉（深链定位时会临时关，见 focusMarker）：markercluster 里
+          // 被聚起来的点不在 DOM 中，openPopup 不生效，还要依赖 zoomToShowLayer
+          var useCluster = !!meta.cluster && g.pts.length > 60 && !!window.L.markerClusterGroup && !state.noCluster;
           var layer = useCluster
             ? window.L.markerClusterGroup({ maxClusterRadius: 48, showCoverageOnHover: false, chunkedLoading: true })
             : window.L.layerGroup();
           var icon = layerIcon(meta);   // 同一图层共用一个图标实例
-          g.pts.forEach(function (pt) { layer.addLayer(makeMarker(pt, meta, icon)); });
+          g.pts.forEach(function (pt) {
+            var mk = makeMarker(pt, meta, icon);
+            pt._mk = mk;                          // 记下句柄，供深链跳转时打开弹窗
+            layer.addLayer(mk);
+          });
+          layerGroups[g.t] = layer;               // 记住图层，深链时判断是不是聚合层
           outer.addLayer(layer);
         });
         outer.addTo(map);
         layers.markers = outer;
       }
-      status.innerHTML = "<b>" + esc(m.area) + "</b> · " + esc(m.id) +
+      var nm = "<b>" + esc(m.area) + "</b> · " + esc(m.id) +
         " ｜ 显示 <b>" + shown + "</b> / " + total + " 个标记点" +
         (total ? "" : "（该地图暂无标记数据，仅作底图参考）");
+      // 任务接取点默认按本章过滤，给个「显示全部」开关
+      if (state.types.quest && (m.quest || []).length) {
+        var all = m.quest.length;
+        nm += ' ｜ 任务接取点 ' + (state.questAll ? "全部 " + all + " 个" : "本章 " + (m.quest || []).filter(function (p) { return !p.c || p.c === state.chap; }).length + " / " + all + " 个") +
+          ' <button type="button" class="qfilter" data-qall="' + (state.questAll ? "0" : "1") + '">' +
+          (state.questAll ? "只看本章" : "显示全部") + "</button>";
+      }
+      status.innerHTML = nm;
     }
 
+    status.addEventListener("click", function (e) {
+      var b = e.target.closest("[data-qall]");
+      if (!b) return;
+      state.questAll = b.getAttribute("data-qall") === "1";
+      drawMarkers();
+    });
     var iconCache = {};
     function layerIcon(meta) {
       var k = meta.label;
@@ -410,10 +517,12 @@
     }
 
     function markerTip(pt, meta) {
-      return "<b>" + esc(meta.label + "：" + poiName(pt, meta.key)) + "</b>";
+      var title = meta.key === "quest" ? pt.t : poiName(pt, meta.key);
+      return "<b>" + esc(meta.label + "：" + title) + "</b>";
     }
 
     function popupHtml(pt, meta) {
+      if (meta.key === "quest") return questPopupHtml(pt);
       var h = '<div class="x2pop"><b>' + esc(meta.label + "：" + poiName(pt, meta.key)) + "</b>";
       if (meta.key === "tbox") {
         if (pt.pop) h += "<div>内容：" + esc(pt.pop) + "</div>";
@@ -444,11 +553,171 @@
       return h + "</div>";
     }
 
+    /* 任务接取点：任务名 + 委托人，可点开任务浮窗 */
+    function questPopupHtml(pt) {
+      var h = '<div class="x2pop"><b>任务接取点：' + esc(pt.t || "") + "</b>";
+      if (pt.n) h += "<div>委托人：" + esc(pt.n) + "</div>";
+      h += '<div class="x2pop-link"><button type="button" class="qlink" data-quest="' + esc(pt.t || "") + '">查看任务详情</button></div>';
+      return h + "</div>";
+    }
+
+    /* 搜索框：
+       - 先按名字筛当前地图的标记点（原有行为）
+       - 若输入命中了「可采集道具 / NPC / 任务」索引，则在下方列出所有可跳转的位置 */
+    function renderHits() {
+      var kw = (search.value || "").trim();
+      hitsBox.innerHTML = "";
+      if (kw.length < 1) { hitsBox.hidden = true; return; }
+      var items = Object.keys(MD.itemIndex || {}).filter(function (n) { return n.indexOf(kw) > -1; }).slice(0, 12);
+      var npcs = Object.keys(MD.npcIndex || {}).filter(function (n) { return n.indexOf(kw) > -1; }).slice(0, 12);
+      var enemies = Object.keys(MD.enemyIndex || {}).filter(function (n) { return n.indexOf(kw) > -1; }).slice(0, 12);
+      var quests = Object.keys(MD.questIndex || {}).filter(function (n) { return n.indexOf(kw) > -1; }).slice(0, 12);
+      if (!items.length && !npcs.length && !enemies.length && !quests.length) { hitsBox.hidden = true; return; }
+      var h = [];
+      var locBtn = function (kind, name, label, sub) {
+        return '<button type="button" class="hit" data-hk="' + kind + '" data-hn="' + esc(name) + '">' +
+          '<span class="hit-n">' + esc(label) + '</span>' + (sub ? '<span class="hit-s">' + esc(sub) + "</span>" : "") + "</button>";
+      };
+      if (quests.length) {
+        h.push('<div class="hits-g"><h5>任务接取点</h5>' + quests.map(function (n) {
+          var maps = (MD.questIndex || {})[n] || [];
+          return locBtn("quest", n, n, maps.join(" / "));
+        }).join("") + "</div>");
+      }
+      if (npcs.length) {
+        h.push('<div class="hits-g"><h5>NPC</h5>' + npcs.map(function (n) {
+          return locBtn("npc", n, n, ((MD.npcIndex || {})[n] || []).length + " 处");
+        }).join("") + "</div>");
+      }
+      if (enemies.length) {
+        h.push('<div class="hits-g"><h5>敌人</h5>' + enemies.map(function (n) {
+          return locBtn("enemy", n, n, ((MD.enemyIndex || {})[n] || []).length + " 处");
+        }).join("") + "</div>");
+      }
+      if (items.length) {
+        h.push('<div class="hits-g"><h5>道具获取点</h5>' + items.map(function (n) {
+          return locBtn("item", n, n, ((MD.itemIndex || {})[n] || []).length + " 处");
+        }).join("") + "</div>");
+      }
+      hitsBox.innerHTML = h.join("");
+      hitsBox.hidden = false;
+    }
+
+    hitsBox.addEventListener("click", function (e) {
+      var b = e.target.closest("[data-hk]");
+      if (!b) return;
+      var kind = b.getAttribute("data-hk"), name = b.getAttribute("data-hn");
+      hitsBox.hidden = true;
+      search.value = "";
+      state.key = "";
+      drawMarkers();
+      if (kind === "quest") {
+        var targets = locateTargets("quest", name);
+        if (targets.length === 1) { focusMapTarget("quest", name, 0); return; }
+        if (!targets.length) return;
+        openPicker(name, targets);
+        return;
+      }
+      var targets = locateTargets(kind, name);
+      if (targets.length === 1) { focusMapTarget(kind, name, 0); return; }
+      if (!targets.length) return;
+      openPicker(name, targets);
+    });
+
     search.addEventListener("input", function () {
       state.key = search.value;
       drawMarkers();
+      renderHits();
     });
 
+    /* 深链跳转：切到指定地图、打开指定图层，找到匹配的标记点并聚焦 + 弹出气泡。
+       matchPt 返回命中的标记点，matchLayer/label 用于给出提示。 */
+    function selectMap(mapId) {
+      state.id = mapId;
+      state.noCluster = false;   // 切图恢复聚合（深链定位时会临时关掉）
+      renderAreas(); renderMaps(); renderTypes();
+      showMap();
+    }
+
+    function focusMarker(mapId, layerKey, matchPt, hint) {
+      if (!MAPS[mapId]) return false;
+      state.types[layerKey] = true;
+      state.key = "";
+      search.value = "";
+      selectMap(mapId);
+      // 取消 selectMap 排队的「重新对准整张图」：它会在几十毫秒后 fitBounds，
+      // 把刚定位好的视野冲掉、弹窗也被关掉（就是「跳过去但没弹窗」的原因）。
+      // showMap 的延时回调里会重新判定，这里清掉 pendingFitId 就不会再对准。
+      fitPending = null;
+      pendingFitId = null;
+      // 临时关掉聚合：被聚起来的点不在 DOM 里，openPopup 不生效。
+      // 标记少、又已经放大到目标附近，不聚合也看得清。
+      state.noCluster = true;
+      drawMarkers();
+      var pt = (MAPS[mapId][layerKey] || []).filter(matchPt)[0];
+      if (!pt || !pt._mk) return false;
+      var map = ensureMap();
+      // 定位到目标并放大一点看清周围；不要用固定的大缩放（会顶到 maxZoom）
+      var z = Math.min(map.getMaxZoom(), Math.max(map.getZoom() + 0.75, -0.5));
+      try { map.setView(pt._mk.getLatLng(), z, { animate: false }); } catch (e) {}
+      // 标出来：周围同类标记很多时，靠高亮圈一眼找到
+      highlightMarker(map, pt._mk);
+
+      var lg = layerGroups[layerKey];
+      var clustered = !!(lg && lg.zoomToShowLayer);
+      var tries = 0;
+      var done = false;
+      var pop = function () {
+        if (done) return;
+        var el = pt._mk.getElement && pt._mk.getElement();
+        if (!el && tries < 40) { tries++; setTimeout(pop, 80); return; }   // 还在聚合里，等等
+        done = true;
+        try {
+          pt._mk.openPopup();
+          var e2 = pt._mk.getElement && pt._mk.getElement();
+          if (e2) { e2.classList.add("x2hit"); var sp = e2.querySelector("span"); if (sp) sp.classList.add("x2hit"); }
+        } catch (e) {}
+      };
+      if (clustered) {
+        // 聚合层里这个点可能还没进 DOM，必须先让所在聚合展开，否则 openPopup 无效
+        try { lg.zoomToShowLayer(pt._mk, pop); } catch (e) { pop(); }
+      }
+      /* 切换地图 / 重绘标记时，showMap 会 removeLayer 掉旧的标记层，
+         Leaflet 的 onRemove 会顺手把弹窗关掉（就是「跳过去但没弹窗」的原因）。
+         这些都在切换后的几十到几百毫秒内发生，顺序不定，所以这里开一个 1.5s 的
+         「重开窗口」：期间只要弹窗被关掉就再打开；用户主动关（点 X / 点地图）时窗口也结束。 */
+      var reopenUntil = 0;
+      var onClose = function () {
+        if (Date.now() > reopenUntil) return;
+        done = false; tries = 0;
+        setTimeout(pop, 60);
+      };
+      map.on("popupclose", onClose);
+      reopenUntil = Date.now() + 1500;
+      setTimeout(function () { map.off("popupclose", onClose); }, 1600);
+      setTimeout(pop, 120);
+      status.innerHTML = "<b>" + esc(MAPS[mapId].area) + "</b> · " + esc(mapId) +
+        " ｜ 已定位：" + esc(hint || poiName(pt, TYPE_META[layerKey].key));
+      return true;
+    }
+
+    /* 给定位到的标记加一个高亮圈，几秒后自动消失 */
+    var hlTimer = null, hlEl = null;
+    function highlightMarker(map, mk) {
+      try {
+        if (hlEl && hlEl.parentNode) hlEl.parentNode.removeChild(hlEl);
+        if (hlTimer) clearTimeout(hlTimer);
+        var ring = window.L.circleMarker(mk.getLatLng(), {
+          radius: 22, color: "#ffd166", weight: 3, opacity: 1, fillColor: "#ffd166", fillOpacity: 0.18,
+          className: "x2hl", interactive: false,
+        }).addTo(map);
+        hlEl = ring;
+        hlTimer = setTimeout(function () { if (ring && ring.remove) ring.remove(); }, 6000);
+      } catch (e) {}
+    }
+
+    box._focusMarker = focusMarker;
+    box._chapterId = chapter.id;
     box._showMap = showMap;
     renderAreas();
     renderMaps();
@@ -503,5 +772,176 @@
     });
   }
 
-  window.X2Map = { renderChapterMap: renderChapterMap, mountChapters: mountChapters, detectAreas: detectAreas, MAPS: MAPS, markerLatLng: markerLatLng };
+  /** 列出所有会显示某张地图的章节（按章节顺序） */
+  var _mapChapters = null;
+  function chaptersForMap(mapId) {
+    if (!_mapChapters) {
+      _mapChapters = {};
+      (window.X2.chapters || []).forEach(function (c) {
+        chapterMaps(c).forEach(function (id) { (_mapChapters[id] = _mapChapters[id] || []).push(c.id); });
+      });
+    }
+    return _mapChapters[mapId] || [];
+  }
+
+  /** 选一个能显示该地图的章节：优先当前所在章节，否则取最先出现该地图的章节 */
+  /** 当前所在的章节 id（用于「本区域优先」判断） */
+  function currentChapterId() {
+    var m = /^#\/story\/([^/?]+)/.exec(location.hash || "");
+    return m ? m[1] : null;
+  }
+
+  function pickChapter(mapId) {
+    var list = chaptersForMap(mapId);
+    if (!list.length) return null;
+    var cur = currentChapterId();
+    if (cur && list.indexOf(cur) > -1) return cur;
+    return list[0];
+  }
+
+  /**
+   * 深链：跳到互动地图的指定位置并弹出标记点。
+   * @param {string} kind "npc" | "colle" | "salvage"
+   * @param {string} name NPC 名 / 采集点类型名 / 打捞点名称
+   */
+  /**
+   * 列出某个 NPC / 敌人 / 道具 / 任务的所有可定位位置（供「多位置时让用户选」）。
+   * 排序：优先当前所在章节 → 其次最先出现该地图的章节。
+   * 正文里提到的名字，几乎都是本区域的东西，所以把「跨到别的章节」排到最后，
+   * 避免点「火鸡人」被带到另一章的地图去。
+   */
+  function locateTargets(kind, name) {
+    if (!name) return [];
+    var out = [];
+    var cur = currentChapterId();
+    var mkLabel = function (mid, extra) {
+      var mm = MAPS[mid] || {};
+      var where = mm.group || mm.area || mid;
+      return (extra ? extra + "：" : "") + where;
+    };
+    var seenKey = {};
+    var add = function (mid, k, key, extra) {
+      var ch = pickChapter(mid);
+      if (!ch) return;
+      var dk = mid + "|" + k + "|" + key;
+      if (seenKey[dk]) return;
+      seenKey[dk] = 1;
+      // 同一张图会出现在多章（如 ma05a_c_03 在 ch1/ch4/ch5 都有），
+      // 只要当前章也列出这张图就算「本章」，不能只比对 pickChapter 的返回值。
+      var here = cur ? chaptersForMap(mid).indexOf(cur) > -1 : true;
+      out.push({ m: mid, k: k, key: key, c: ch, label: mkLabel(mid, extra), sameChap: here });
+    };
+    if (kind === "npc" || kind === "enemy") {
+      ((MD[LINK_KINDS[kind].index] || {})[name] || []).forEach(function (mid) { add(mid, kind, name); });
+    } else if (kind === "quest") {
+      ((MD.questIndex || {})[name] || []).forEach(function (mid) { add(mid, "quest", name); });
+    } else {
+      // 同一种采集点在一张图上会有好几个点，合并成一条（跳过去后地图上仍看得到全部）
+      ((MD.itemIndex || {})[name] || []).forEach(function (it) {
+        add(it[0], it[2], it[1], it[2] === "salvage" ? "打捞点" : "采集点");
+      });
+    }
+    out.sort(function (a, b) { return (b.sameChap ? 1 : 0) - (a.sameChap ? 1 : 0); });
+    return out;
+  }
+
+  /** 该名字在**当前章节**是否有位置（自动链接用它，避免把本章的任务链到别章地图去）。
+      不在章节页（系统/地图/图鉴等）时没有「当前章节」，就不做这个限制。 */
+  function locatableHere(kind, name) {
+    var cur = currentChapterId();
+    if (!cur) return locatableAnywhere(name);
+    return locateTargets(kind, name).some(function (t) { return t.sameChap; });
+  }
+  /** 该名字在任意章节是否有位置（显式 [[敌人:X]] 这类仍允许跳） */
+  function locatableAnywhere(name) {
+    var md = MD;
+    return !!((md.npcIndex || {})[name] || (md.enemyIndex || {})[name] || (md.itemIndex || {})[name] || (md.questIndex || {})[name]);
+  }
+
+  /** 生成「在某个地图上命中某个标记点」的判定函数 */
+  function matcherFor(kind, name, key) {
+    if (kind === "npc" || kind === "enemy") return function (p) { return p.n === name; };
+    if (kind === "quest") return function (p) { return p.t === name; };
+    return function (p) { return p.type === key || p.n === key; };
+  }
+
+  /**
+   * 深链：跳到互动地图的指定位置并弹出标记点。
+   * @param {string} kind "npc" | "item" | "quest"
+   * @param {string} name NPC 名 / 道具名 / 任务名
+   * @param {number} [idx] 指定第几个位置（不传则跳第一个）
+   */
+  function focusMapTarget(kind, name, idx) {
+    var targets = locateTargets(kind, name);
+    if (!targets.length) return false;
+    var t = targets[idx || 0];
+    if (!t) return false;
+    var hint = kind === "npc" ? "NPC：" + name
+      : kind === "enemy" ? "敌人：" + name
+      : kind === "quest" ? "任务接取点：" + name
+      : name + "（" + t.label + "）";
+    return gotoAndFocus(t.c, t.m, t.k, matcherFor(t.k, name, t.key), hint);
+  }
+
+  /** 搜索定位：按类型 + 位置键直接聚焦 */
+  function focusIndex(mapId, layerKey, keyValue, label) {
+    if (!MAPS[mapId]) return false;
+    var card = document.getElementById("mapcard-" + pickChapter(mapId));
+    if (card && card._focusMarker) return card._focusMarker(mapId, layerKey, matcherFor(layerKey, keyValue, keyValue), label);
+    return false;
+  }
+
+  /** 一个道具 / NPC 有多个位置时，弹一个选择列表让用户挑一个再跳 */
+  function openPicker(name, targets) {
+    var old = document.getElementById("x2picker");
+    if (old) old.parentNode.removeChild(old);
+    var box = el("div", "x2picker");
+    box.id = "x2picker";
+    box.innerHTML = '<div class="x2picker-panel"><h4>「' + esc(name) + '」可在 ' + targets.length + " 处获取，选择要跳转的位置：</h4>" +
+      '<div class="x2picker-list">' + targets.map(function (t, i) {
+        return '<button type="button" class="hit" data-pk="' + i + '"><span class="hit-n">' + esc(t.label) + "</span>" +
+          (t.sameChap ? '<span class="hit-s">本章</span>' : '<span class="hit-s">第 ' + esc(String(t.c).replace(/^ch/, "").replace("final", "10")) + " 章</span>") + "</button>";
+      }).join("") + "</div>" +
+      '<button type="button" class="btn x2picker-close">取消</button></div>';
+    function close() { if (box.parentNode) box.parentNode.removeChild(box); }
+    box.addEventListener("click", function (e) {
+      if (e.target === box || e.target.closest(".x2picker-close")) { close(); return; }
+      var b = e.target.closest("[data-pk]");
+      if (!b) return;
+      var i = +b.getAttribute("data-pk");
+      close();
+      var t = targets[i];
+      var hint = t.k === "npc" ? "NPC：" + name
+        : t.k === "enemy" ? "敌人：" + name
+        : t.k === "quest" ? "任务接取点：" + name
+        : name + "（" + t.label + "）";
+      gotoAndFocus(t.c, t.m, t.k, matcherFor(t.k, name, t.key), hint);
+    });
+    document.body.appendChild(box);
+  }
+
+  /** 切到章节并聚焦（若已在目标章节则直接聚焦），最多等 ~1.5s 让地图卡片挂上 */
+  function gotoAndFocus(chapterId, mapId, layer, match, hint) {
+    var already = location.hash === "#/story/" + chapterId;
+    if (!already) location.hash = "#/story/" + chapterId;
+    var tries = 0;
+    (function attempt() {
+      var card = document.getElementById("mapcard-" + chapterId);
+      if (card && card._focusMarker) {
+        if (card._focusMarker(mapId, layer, match, hint)) {
+          try { card.scrollIntoView({ block: "center", behavior: already ? "smooth" : "auto" }); } catch (e) {}
+        }
+        return;
+      }
+      if (++tries < 40) setTimeout(attempt, 50);
+    })();
+    return true;
+  }
+
+  window.X2Map = {
+    renderChapterMap: renderChapterMap, mountChapters: mountChapters, detectAreas: detectAreas,
+    MAPS: MAPS, markerLatLng: markerLatLng, chapterMaps: chapterMaps,
+    focusMapTarget: focusMapTarget, locateTargets: locateTargets, focusIndex: focusIndex,
+    openPicker: openPicker, locatableHere: locatableHere, locatableAnywhere: locatableAnywhere,
+  };
 })();

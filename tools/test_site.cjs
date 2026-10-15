@@ -19,7 +19,7 @@ function ok(name, cond, extra) {
 }
 
 // 注入数据与脚本（顺序与 index.html 一致）
-const jsFiles = ["data/index.js", "data/quests.js", "data/chapters.js", "data/systems.js", "data/codex.js", "data/extras.js", "data/mag.js", "data/maps.js", "assets/map.js", "assets/app.js"];
+const jsFiles = ["data/index.js", "data/quests.js", "data/questflows.js", "data/chapters.js", "data/systems.js", "data/codex.js", "data/extras.js", "data/mag.js", "data/maps.js", "assets/map.js", "assets/app.js"];
 for (const f of jsFiles) {
   const code = fs.readFileSync(path.join(SITE, f), "utf8");
   try {
@@ -127,11 +127,11 @@ ok("地图数据：90 张地图", ((X2.mapsData || {}).maps || []).length === 90
 ok("地图数据：区域索引", Object.keys((X2.mapsData || {}).areas || {}).length >= 15,
    Object.keys((X2.mapsData || {}).areas || {}).length + " 个区域");
 const mapMarkers = ((X2.mapsData || {}).maps || []).reduce(
-  (n, m) => n + ["tbox", "colle", "salvage", "enemy", "npc"].reduce((a, k) => a + (m[k] || []).length, 0), 0);
+  (n, m) => n + ["tbox", "colle", "salvage", "enemy", "npc", "quest"].reduce((a, k) => a + (m[k] || []).length, 0), 0);
 ok("地图数据：标记点数量", mapMarkers > 8000, mapMarkers + " 个");
-const layerTotals = ["tbox", "colle", "salvage", "enemy", "npc"].map(
+const layerTotals = ["tbox", "colle", "salvage", "enemy", "npc", "quest"].map(
   (k) => k + ":" + ((X2.mapsData || {}).maps || []).reduce((n, m) => n + (m[k] || []).length, 0));
-ok("地图数据：五个图层齐全", ["tbox", "colle", "salvage", "enemy", "npc"].every(
+ok("地图数据：六个图层齐全", ["tbox", "colle", "salvage", "enemy", "npc", "quest"].every(
   (k) => ((X2.mapsData || {}).maps || []).reduce((n, m) => n + (m[k] || []).length, 0) > 0), layerTotals.join(" "));
 window.location.hash = "#/story/ch2";
 window.dispatchEvent(new window.Event("hashchange"));
@@ -144,9 +144,73 @@ if (mapHost) {
   ok("地图切换按钮", mapHost.querySelectorAll(".map-maps .chip").length > 0,
      mapHost.querySelectorAll(".map-maps .chip").length + " 张地图");
   const typeLabels = Array.prototype.map.call(mapHost.querySelectorAll(".map-types .map-type"), (c) => c.textContent.trim());
-  ok("标记类型筛选按钮（5 个图层）", typeLabels.length === 5, typeLabels.join(" / "));
-  ok("默认只开宝箱 / 采集点 / 打捞点", mapHost.querySelectorAll(".map-types .map-type.on").length === 3);
-  ok("标记搜索框", !!mapHost.querySelector(".map-search"));
+  ok("标记类型筛选按钮（6 个图层）", typeLabels.length === 6, typeLabels.join(" / "));
+  ok("默认开着宝箱 / 采集点 / 打捞点 / 任务接取点", mapHost.querySelectorAll(".map-types .map-type.on").length === 4);
+  // 任务接取点图层 + 索引
+  const questPts = ((X2.mapsData || {}).maps || []).reduce((n, m) => n + (m.quest || []).length, 0);
+  ok("地图数据：任务接取点", questPts > 100, questPts + " 个接取点");
+  ok("地图数据：任务反向索引", Object.keys((X2.mapsData || {}).questIndex || {}).length > 100,
+     Object.keys((X2.mapsData || {}).questIndex || {}).length + " 个任务");
+  // 一个道具可在多处获取时，locateTargets 应返回多条
+  const multi = Object.keys((X2.mapsData || {}).itemIndex || {}).find(
+    (n) => X2.mapsData.itemIndex[n].length > 1);
+  ok("道具可定位到多个位置", !!multi && window.X2Map.locateTargets("item", multi).length > 1,
+     multi + " → " + (multi ? window.X2Map.locateTargets("item", multi).length : 0) + " 处");
+  ok("导出了 locateTargets / openPicker", !!(window.X2Map.locateTargets && window.X2Map.openPicker));
+  // 任务接取点要带解锁章节，地图上才能按当前章节过滤
+  const qpts = ((X2.mapsData || {}).maps || []).reduce((a, m) => a.concat(m.quest || []), []);
+  ok("任务接取点带章节标记", qpts.length > 0 && qpts.every((p) => p.c),
+     qpts.filter((p) => p.c).length + "/" + qpts.length);
+  ok("多位置时给出可区分的位置列表（含地区/分组名）",
+     (window.X2Map.locateTargets("item", Object.keys((X2.mapsData || {}).itemIndex || {})[0]) || [])
+       .every((t) => t.label && t.label.length > 2));
+  ok("地图搜索框（可搜道具/NPC/任务）", !!mapHost.querySelector(".map-search") && !!mapHost.querySelector(".map-hits"));
+  // 地图不能盖住页面浮层：Leaflet 内部 z-index 高达 1000，靠 .map-canvas 自成层叠上下文来隔离。
+  // jsdom 不加载外部样式表，所以直接检查 CSS 源码。
+  const cssSrc = fs.readFileSync(path.join(SITE, "assets/style.css"), "utf8");
+  const canvasRule = (cssSrc.match(/\.map-canvas\{[^}]*\}/) || [""])[0];
+  ok("地图画布自成层叠上下文（不压住浮窗）", /z-index\s*:\s*0/.test(canvasRule), canvasRule.slice(0, 90));
+  // 互动地图深链：NPC / 道具 反向索引与接口
+  ok("地图数据：NPC 反向索引", Object.keys((X2.mapsData || {}).npcIndex || {}).length > 100,
+     Object.keys((X2.mapsData || {}).npcIndex || {}).length + " 个 NPC 名");
+  ok("地图数据：道具反向索引", Object.keys((X2.mapsData || {}).itemIndex || {}).length > 100,
+     Object.keys((X2.mapsData || {}).itemIndex || {}).length + " 个道具名");
+  ok("导出了 focusMapTarget / chapterMaps", !!(window.X2Map && window.X2Map.focusMapTarget && window.X2Map.chapterMaps));
+  // 敌人也要能搜 / 能深链
+  ok("地图数据：敌人反向索引", Object.keys((X2.mapsData || {}).enemyIndex || {}).length > 500,
+     Object.keys((X2.mapsData || {}).enemyIndex || {}).length + " 个敌人名");
+  const anyEnemy = Object.keys((X2.mapsData || {}).enemyIndex || {})[0];
+  ok("敌人深链能定位到地图", !!anyEnemy && window.X2Map.locateTargets("enemy", anyEnemy).length > 0,
+     anyEnemy + " → " + (anyEnemy ? window.X2Map.locateTargets("enemy", anyEnemy).length : 0) + " 处");
+  // 自动链接不能把人带去别章的地图：在 ch2 上，「火鸡人」只在阿卡狄亚（别章）有 -> locatableHere 必须为 false
+  window.location.hash = "#/story/ch2";
+  window.dispatchEvent(new window.Event("hashchange"));
+  const hereCh2 = window.X2Map.locateTargets("enemy", "火鸡人");
+  ok("跨章的名字本章不自动链接", hereCh2.length > 0 && !hereCh2.some((t) => t.sameChap),
+     "火鸡人 → " + hereCh2.map((t) => t.c).join("/") + "（当前 ch2）");
+  ok("同一张图在多章出现也算「本章」", (function () {
+    // ma05a_c_03 同时出现在 ch1/ch4/ch5，站在 ch4 上应算本章
+    window.location.hash = "#/story/ch4";
+    window.dispatchEvent(new window.Event("hashchange"));
+    var r = window.X2Map.locateTargets("quest", "弄坏起重机的人是谁").some((t) => t.sameChap);
+    window.location.hash = "#/story/ch2";     // 还原，后面的断言还要用 ch2 的 mapHost
+    window.dispatchEvent(new window.Event("hashchange"));
+    return r;
+  })());
+  // 官方任务目标（与攻略流程并列可切换）
+  const qf = X2.questFlows || {};
+  ok("官方任务目标数据", Object.keys(qf).length > 100, Object.keys(qf).length + " 个任务");
+  const withOff = (X2.quests || []).find((q) => (q.flow || []).length && qf[q.name]);
+  ok("有任务同时具备攻略流程与官方目标", !!withOff, withOff ? withOff.name : "");
+  // 任务流程里的 NPC / 可采集道具名应渲染成可点（跳互动地图）的按钮
+  // （上面切过章节，mapHost 已是旧节点，这里重新取当前 DOM）
+  const mapLinks = view.querySelectorAll(".maplink");
+  ok("流程正文里有跳互动地图的名词按钮", mapLinks.length > 0, mapLinks.length + " 个");
+  if (mapLinks.length) {
+    const b0 = mapLinks[0];
+    ok("名词按钮带 data-mk / data-mn", !!b0.getAttribute("data-mk") && !!b0.getAttribute("data-mn"),
+       b0.getAttribute("data-mk") + ":" + b0.getAttribute("data-mn"));
+  }
   ok("地图状态行显示标记数", /显示\s*\d+/.test(mapHost.querySelector(".map-status").textContent),
      (mapHost.querySelector(".map-status").textContent || "").slice(0, 60));
   // 第二章应识别出古拉等区域
