@@ -122,6 +122,23 @@ ok("所有章节都没有 [object Object]", objLeak === 0, objLeak + " 处");
 ok("章节要点渲染出标题", keypointTitles > 0, keypointTitles + " 个标题");
 ok("要点/备注没有空内容", emptyNotes === 0, emptyNotes + " 处");
 
+// 章节徽标：卡片左上角的图标应是紧凑数字，而不是「第一章」这类长文本
+window.location.hash = "#/story";
+window.dispatchEvent(new window.Event("hashchange"));
+const badgeTexts = Array.prototype.map.call(view.querySelectorAll(".chapter-card .cc-badge"), (b) => b.textContent.trim());
+ok("章节列表徽标数量正确", badgeTexts.length === 10, badgeTexts.length + " 个");
+ok("章节徽标是紧凑数字", badgeTexts.slice(0, 9).join(",") === "1,2,3,4,5,6,7,8,9", badgeTexts.slice(0, 9).join(","));
+ok("最终章徽标是「终」", badgeTexts[9] === "终", String(badgeTexts[9]));
+ok("徽标里没有长文本", badgeTexts.every((t) => t.length <= 2), badgeTexts.join(" "));
+window.location.hash = "#/home";
+window.dispatchEvent(new window.Event("hashchange"));
+const homeBadges = Array.prototype.map.call(view.querySelectorAll(".chapter-card .cc-badge"), (b) => b.textContent.trim());
+ok("首页章节卡也用小徽标", homeBadges.length >= 6 && homeBadges.every((t) => t.length <= 2), homeBadges.join(" "));
+window.location.hash = "#/story/ch3";
+window.dispatchEvent(new window.Event("hashchange"));
+const barNums = Array.prototype.map.call(view.querySelectorAll(".chapterbar .cb-num"), (b) => b.textContent.trim());
+ok("章节切换条带小序号", barNums.length === 10 && barNums[0] === "1", barNums.join(" "));
+
 // 互动地图：章节页应挂上地图卡片（含区域 / 地图 / 标记类型切换与搜索）
 ok("地图数据：90 张地图", ((X2.mapsData || {}).maps || []).length === 90, "得到 " + (((X2.mapsData || {}).maps) || []).length);
 ok("地图数据：区域索引", Object.keys((X2.mapsData || {}).areas || {}).length >= 15,
@@ -170,6 +187,10 @@ if (mapHost) {
   const cssSrc = fs.readFileSync(path.join(SITE, "assets/style.css"), "utf8");
   const canvasRule = (cssSrc.match(/\.map-canvas\{[^}]*\}/) || [""])[0];
   ok("地图画布自成层叠上下文（不压住浮窗）", /z-index\s*:\s*0/.test(canvasRule), canvasRule.slice(0, 90));
+  // 拖动地图时要停掉标记悬停，否则滑过一堆标记会攒下一堆悬停标签
+  ok("拖动时禁用标记悬停（CSS）", /\.map-canvas\.x2-dragging[^{]*\{[^}]*pointer-events\s*:\s*none/.test(cssSrc.replace(/\s*\n\s*/g, "")));
+  const mapSrc = fs.readFileSync(path.join(SITE, "assets/map.js"), "utf8");
+  ok("绑定了 dragstart / dragend 清理悬停标签", /on\("dragstart"/.test(mapSrc) && /on\("dragend"/.test(mapSrc));
   // 互动地图深链：NPC / 道具 反向索引与接口
   ok("地图数据：NPC 反向索引", Object.keys((X2.mapsData || {}).npcIndex || {}).length > 100,
      Object.keys((X2.mapsData || {}).npcIndex || {}).length + " 个 NPC 名");

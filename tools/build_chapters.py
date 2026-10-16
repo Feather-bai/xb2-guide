@@ -3,7 +3,7 @@
 流程以 wiki 章节为主干（步骤最完整、系统更新最全），
 把《每章更多备注》的实战要点并入对应步骤，分歧统一收进 diffs / 差异备注。
 """
-import json, os
+import json, os, re
 
 WS = r"C:\Users\ZhuanZ\Documents\deepseek-harness\default-workspace"
 OUT = os.path.join(WS, "site", "data")
@@ -17,9 +17,20 @@ SRC_MAG = "《攻略特辑》（掌机王Plus）"
 chapters = []
 
 
+_CN_NUM = {"一": "1", "二": "2", "三": "3", "四": "4", "五": "5",
+           "六": "6", "七": "7", "八": "8", "九": "9", "十": "10"}
+
+
 def ch(cid, num, title, summary, place, keypoints, steps, diffs, quests):
+    # badge：卡片左上角徽标用的紧凑文字（「第一章」→「1」，「最终章」→「终」）
+    if num.startswith("最终"):
+        badge = "终"
+    else:
+        m = re.search(r"[0-9一二三四五六七八九十]+", num)
+        raw = m.group(0) if m else num[:1]
+        badge = _CN_NUM.get(raw, raw)
     chapters.append({
-        "id": cid, "num": num, "title": title, "short": title,
+        "id": cid, "num": num, "title": title, "short": title, "badge": badge,
         "summary": summary, "place": place, "keypoints": keypoints,
         "steps": steps, "diffs": diffs, "quests": quests,
     })

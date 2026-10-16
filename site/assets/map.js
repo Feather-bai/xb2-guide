@@ -346,6 +346,48 @@
       window.L.control.scale({ imperial: false, metric: true }).addTo(leafletMap);
       MAP_INSTANCES.push({ map: leafletMap, canvas: canvas });
       bindResize();
+      /* 拖动地图时，底下的标记会从光标下滑过。Leaflet 在拖动中不会派发 mouseout，
+         但 mouseover 还是会打在新滑进来的标记上，于是悬停标签（tooltip）只会加不会减，
+         一拖就攒一堆 —— 用户看到的就是「掠过就弹、还不消失」。
+         拖拽期间直接停掉标记的交互层，拖完再恢复并把残留的标签关干净。 */
+      var dragging = false;
+      var dragResetTimer = null;
+      var endDrag = function () {
+        if (!dragging) return;
+        dragging = false;
+        clearTimeout(dragResetTimer);
+        // 稍等一下再恢复：dragend 之后还会有一两个 mouseover 补刀
+        dragResetTimer = setTimeout(function () {
+          canvas.classList.remove("x2-dragging");
+          clearTooltips();
+        }, 80);
+      };
+      var clearTooltips = function () {
+        Object.keys(MAPS).forEach(function (id) {
+          var m = MAPS[id] || {};
+          LAYER_KEYS.forEach(function (k) {
+            (m[k] || []).forEach(function (pt) {
+              if (pt._mk && pt._mk.closeTooltip) { try { pt._mk.closeTooltip(); } catch (e) {} }
+            });
+          });
+        });
+        // 兜底：清掉画布内残留的标签节点
+        var pane = canvas.querySelector(".leaflet-tooltip-pane");
+        if (pane) pane.innerHTML = "";
+      };
+      leafletMap.on("dragstart", function () {
+        dragging = true;
+        clearTimeout(dragResetTimer);
+        clearTooltips();
+        canvas.classList.add("x2-dragging");   // 拖动中不响应标记悬停
+      });
+      leafletMap.on("dragend", endDrag);
+      // 兜底：任何一次鼠标松开都收尾，避免 dragend 没触发时 x2-dragging 卡住
+      document.addEventListener("mouseup", endDrag, true);
+      window.addEventListener("blur", endDrag);
+      // 鼠标离开画布时也收尾并清一次残留
+      canvas.addEventListener("mouseleave", function () { endDrag(); clearTooltips(); });
+      box._clearTooltips = clearTooltips;
       // Leaflet 自带的 autoPan 对高弹窗推不到位（顶端被画布裁掉），这里在弹窗打开后自己校正。
       // 弹窗是异步布局的，所以要重试几帧直到位置稳定。
       leafletMap.on("popupopen", function (e) {

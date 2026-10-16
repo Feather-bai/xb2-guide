@@ -315,7 +315,7 @@
     h.push('<div class="grid two">');
     chapters.slice(0, 6).forEach(function (c) {
       h.push('<a class="chapter-card" href="#/story/' + esc(c.id) + '">' +
-        '<div class="cc-top"><span class="cc-num">' + esc(c.num || "") + "</span><h3>" + esc(c.title) + "</h3></div>" +
+        '<div class="cc-top"><span class="cc-num cc-badge">' + esc(chapterBadge(c)) + "</span><h3>" + esc(c.title) + "</h3></div>" +
         "<p>" + esc(c.summary || "") + "</p></a>");
     });
     h.push("</div>");
@@ -325,20 +325,33 @@
 
     h.push("<h2>模块导航</h2><div class=\"grid two\">");
     (X2.modules || []).filter(function (m) { return m.id !== "home"; }).forEach(function (m) {
-      h.push('<a class="chapter-card" href="#/' + m.id + '"><div class="cc-top"><span class="cc-num">' +
-        (NAV_ICON[m.id] || "•") + "</span><h3>" + esc(m.title) + "</h3></div><p>" + esc(m.desc || "") + "</p></a>");
+      // 「主线流程」用首章徽标，其余用模块图标
+      var isStory = m.id === "story";
+      var firstCh = (X2.chapters || []).filter(function (c) { return c.id === "ch1"; })[0] || (X2.chapters || [])[0];
+      var ico = isStory && firstCh ? chapterBadge(firstCh) : (NAV_ICON[m.id] || "•");
+      h.push('<a class="chapter-card" href="#/' + m.id + '"><div class="cc-top"><span class="cc-num' +
+        (isStory ? " cc-badge" : "") + '">' + esc(ico) + "</span><h3>" + esc(m.title) + "</h3></div><p>" + esc(m.desc || "") + "</p></a>");
     });
     h.push("</div>");
     return h.join("");
   }
 
   /* ---------------------------------------------------------- 主线流程 */
+  // 章节徽标：优先用数据里的紧凑 badge（1…9 / 终），回退到从 num 里取数字
+  function chapterBadge(c) {
+    if (c.badge) return c.badge;
+    var num = String(c.num || "");
+    if (num.indexOf("最终") > -1) return "终";
+    var m = num.match(/[0-9一二三四五六七八九十]+/);
+    return m ? m[0] : num.slice(0, 1);
+  }
+
   function viewStoryList() {
     var h = ['<section class="hero"><h1>主线流程</h1><p>按章节整理的完整流程。流程中以<span class="qlink">彩色任务名</span>出现的地方都可以点开浮窗，直接看该支线的接取条件、流程与注意事项。</p></section>'];
     h.push('<div class="grid two">');
     (X2.chapters || []).forEach(function (c) {
       h.push('<a class="chapter-card" href="#/story/' + esc(c.id) + '">' +
-        '<div class="cc-top"><span class="cc-num">' + esc(c.num) + "</span><h3>" + esc(c.title) + "</h3></div>" +
+        '<div class="cc-top"><span class="cc-num cc-badge">' + esc(chapterBadge(c)) + "</span><h3>" + esc(c.title) + "</h3></div>" +
         "<p>" + esc(c.summary || "") + "</p>" +
         '<div class="chiprow" style="margin-top:7px">' +
         (c.quests && c.quests.length ? '<span class="chip">支线 ' + c.quests.length + "</span>" : "") +
@@ -352,7 +365,8 @@
   function chapterBar(cur) {
     var ch = X2.chapters || [];
     return '<nav class="chapterbar">' + ch.map(function (c) {
-      return '<a href="#/story/' + esc(c.id) + '"' + (c.id === cur ? ' class="active"' : "") + ">" + esc(c.num) + " " + esc(c.short || c.title) + "</a>";
+      return '<a href="#/story/' + esc(c.id) + '"' + (c.id === cur ? ' class="active"' : "") + ">" +
+        '<span class="cb-num">' + esc(chapterBadge(c)) + "</span>" + esc(c.short || c.title) + "</a>";
     }).join("") + "</nav>";
   }
 
