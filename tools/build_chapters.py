@@ -20,6 +20,9 @@ chapters = []
 _CN_NUM = {"一": "1", "二": "2", "三": "3", "四": "4", "五": "5",
            "六": "6", "七": "7", "八": "8", "九": "9", "十": "10"}
 
+# 徽标配色（章 / 模块共用的同一套色板，由 style.css 里的 .cc-bg1…8 定义）
+COLORS = ["bg1", "bg2", "bg3", "bg4", "bg5", "bg6", "bg7", "bg8"]
+
 
 def ch(cid, num, title, summary, place, keypoints, steps, diffs, quests):
     # badge：卡片左上角徽标用的紧凑文字（「第一章」→「1」，「最终章」→「终」）
@@ -31,6 +34,7 @@ def ch(cid, num, title, summary, place, keypoints, steps, diffs, quests):
         badge = _CN_NUM.get(raw, raw)
     chapters.append({
         "id": cid, "num": num, "title": title, "short": title, "badge": badge,
+        "color": COLORS[len(chapters) % len(COLORS)],
         "summary": summary, "place": place, "keypoints": keypoints,
         "steps": steps, "diffs": diffs, "quests": quests,
     })

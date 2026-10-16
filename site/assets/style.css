@@ -276,31 +276,27 @@ details.acc .acc-body{padding:0 13px 13px;border-top:1px solid var(--line-soft)}
 }
 .chapter-card:hover{border-color:color-mix(in srgb,var(--accent) 45%,transparent);text-decoration:none}
 .chapter-card .cc-top{display:flex;align-items:center;gap:9px;margin-bottom:.2em}
+/* 卡片徽标（章节数字 / 模块与系统页符号）—— 全站统一一套样式 */
 .chapter-card .cc-num{
-  flex:0 0 auto;width:34px;height:34px;border-radius:9px;display:grid;place-items:center;
-  background:linear-gradient(135deg,color-mix(in srgb,var(--accent-2) 65%,transparent),color-mix(in srgb,var(--accent) 45%,transparent));
-  color:#fff;font-weight:800;font-size:13px;
+  flex:0 0 auto;width:auto;min-width:34px;height:34px;padding:0 5px;
+  border-radius:9px;display:grid;place-items:center;
+  background:var(--badge,linear-gradient(135deg,#3a5a8c,#7ea6d8));
+  color:#fff;font-weight:800;font-size:15px;line-height:1;
+  font-variant-numeric:tabular-nums;letter-spacing:0;
+  box-shadow:0 1px 6px rgba(0,0,0,.28);
 }
 .chapter-card h3{margin:0;font-size:1rem}
 .chapter-card p{margin:0;font-size:13.4px;color:var(--fg-mute)}
 
-/* 章节徽标：紧凑的数字 /「终」，避免「第一章」这类长文本挤在方格里 */
-.chapter-card .cc-num.cc-badge{
-  width:auto;min-width:34px;padding:0 5px;
-  background:var(--badge,linear-gradient(135deg,var(--accent-2),var(--accent)));
-  color:#fff;font-weight:800;font-size:15px;line-height:34px;
-  font-variant-numeric:tabular-nums;letter-spacing:0;
-  box-shadow:0 1px 6px rgba(0,0,0,.28);
-}
-/* 按顺序轮换配色，方便一眼区分章节 */
-.chapter-card:nth-child(8n+1) .cc-badge{--badge:linear-gradient(135deg,#e0483f,#ff8a5c)}
-.chapter-card:nth-child(8n+2) .cc-badge{--badge:linear-gradient(135deg,#1f8fa8,#4dd0e1)}
-.chapter-card:nth-child(8n+3) .cc-badge{--badge:linear-gradient(135deg,#3f7d3f,#7fd07f)}
-.chapter-card:nth-child(8n+4) .cc-badge{--badge:linear-gradient(135deg,#b57f00,#ffc857)}
-.chapter-card:nth-child(8n+5) .cc-badge{--badge:linear-gradient(135deg,#6a4fb0,#a98cf0)}
-.chapter-card:nth-child(8n+6) .cc-badge{--badge:linear-gradient(135deg,#0f7d6b,#4dd0b0)}
-.chapter-card:nth-child(8n+7) .cc-badge{--badge:linear-gradient(135deg,#a8437f,#e888c0)}
-.chapter-card:nth-child(8n+8) .cc-badge{--badge:linear-gradient(135deg,#3a5a8c,#7ea6d8)}
+/* 徽标配色板：章 / 模块 / 系统页共用，颜色写在数据里，排序变化不会串色 */
+.cc-bg1{--badge:linear-gradient(135deg,#e0483f,#ff8a5c)}
+.cc-bg2{--badge:linear-gradient(135deg,#1f8fa8,#4dd0e1)}
+.cc-bg3{--badge:linear-gradient(135deg,#3f7d3f,#7fd07f)}
+.cc-bg4{--badge:linear-gradient(135deg,#b57f00,#ffc857)}
+.cc-bg5{--badge:linear-gradient(135deg,#6a4fb0,#a98cf0)}
+.cc-bg6{--badge:linear-gradient(135deg,#0f7d6b,#4dd0b0)}
+.cc-bg7{--badge:linear-gradient(135deg,#a8437f,#e888c0)}
+.cc-bg8{--badge:linear-gradient(135deg,#3a5a8c,#7ea6d8)}
 
 /* 章节切换条里的小号序号 */
 .chapterbar a .cb-num{

@@ -13,16 +13,18 @@ def u(t):
 
 
 # 模块清单（导航顺序）
+# icon：卡片徽标里的符号；color：徽标配色（与章节徽标共用 .cc-bg1…8 色板）
+# 这里显式写死颜色，避免以后调整模块顺序时配色跟着串位。
 modules = [
-    {"id": "home", "group": "开始", "title": "首页", "desc": "整合说明与快速入口"},
-    {"id": "story", "group": "攻略主体", "title": "主线流程", "desc": "第一至最终章的完整流程，支线可点开浮窗"},
-    {"id": "quests", "group": "攻略主体", "title": "任务库", "desc": "166 条主线 / 普通 / 异刃任务的条件、流程与报酬"},
-    {"id": "systems", "group": "攻略主体", "title": "系统与养成", "desc": "战斗系统、异刃培养、佣兵团、打捞与经济"},
-    {"id": "codex", "group": "资料", "title": "图鉴", "desc": "异刃、辅助核心、饰品、地标、珍稀种索引"},
-    {"id": "maps", "group": "资料", "title": "地图与收集", "desc": "各区域地标、宝箱、打捞点与开环怪"},
-    {"id": "mag", "group": "资料", "title": "原刊对照", "desc": "《攻略特辑》上下册 68 页原图与文字"},
-    {"id": "compare", "group": "资料", "title": "攻略差异对照", "desc": "四份材料说法不同的地方集中对照"},
-    {"id": "about", "group": "关于", "title": "资料来源与说明", "desc": "四份材料、整理原则与版权"},
+    {"id": "home", "group": "开始", "title": "首页", "desc": "整合说明与快速入口", "icon": "◆", "color": "bg1"},
+    {"id": "story", "group": "攻略主体", "title": "主线流程", "desc": "第一至最终章的完整流程，支线可点开浮窗", "icon": "▤", "color": "bg2"},
+    {"id": "quests", "group": "攻略主体", "title": "任务库", "desc": "166 条主线 / 普通 / 异刃任务的条件、流程与报酬", "icon": "☰", "color": "bg3"},
+    {"id": "systems", "group": "攻略主体", "title": "系统与养成", "desc": "战斗系统、异刃培养、佣兵团、打捞与经济", "icon": "⚔", "color": "bg4"},
+    {"id": "codex", "group": "资料", "title": "图鉴", "desc": "异刃、辅助核心、饰品、地标、珍稀种索引", "icon": "◈", "color": "bg5"},
+    {"id": "maps", "group": "资料", "title": "地图与收集", "desc": "各区域地标、宝箱、打捞点与开环怪", "icon": "◎", "color": "bg6"},
+    {"id": "mag", "group": "资料", "title": "原刊对照", "desc": "《攻略特辑》上下册 68 页原图与文字", "icon": "▦", "color": "bg7"},
+    {"id": "compare", "group": "资料", "title": "攻略差异对照", "desc": "四份材料说法不同的地方集中对照", "icon": "⇄", "color": "bg8"},
+    {"id": "about", "group": "关于", "title": "资料来源与说明", "desc": "四份材料、整理原则与版权", "icon": "ℹ", "color": "bg1"},
 ]
 
 # 可链接名词：从图鉴与 smw 数据聚合

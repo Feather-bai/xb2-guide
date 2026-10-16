@@ -10,7 +10,9 @@ systems = []
 
 
 def S(sid, icon, title, desc, blocks):
-    systems.append({"id": sid, "icon": icon, "title": title, "desc": desc, "blocks": blocks})
+    # color：卡片徽标配色，与章节徽标共用 .cc-bg1…8 色板（按出场顺序轮换）
+    systems.append({"id": sid, "icon": icon, "title": title, "desc": desc, "blocks": blocks,
+                    "color": "bg%d" % (len(systems) % 8 + 1)})
 
 
 def p(text): return {"p": text}
