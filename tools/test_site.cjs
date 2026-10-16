@@ -131,14 +131,14 @@ ok("章节徽标是紧凑数字", badgeTexts.slice(0, 9).join(",") === "1,2,3,4,
 ok("最终章徽标是「终」", badgeTexts[9] === "终", String(badgeTexts[9]));
 ok("徽标里没有长文本", badgeTexts.every((t) => t.length <= 2), badgeTexts.join(" "));
 ok("章节徽标都带配色类", Array.prototype.every.call(view.querySelectorAll(".chapter-card .cc-badge"),
-   (b) => /(^|\s)bg[1-8](\s|$)/.test(b.className)));
+   (b) => (b.className.match(/cc-bg[1-8]/) || []).length > 0));
 window.location.hash = "#/home";
 window.dispatchEvent(new window.Event("hashchange"));
 const homeBadges = Array.prototype.map.call(view.querySelectorAll(".chapter-card .cc-badge"), (b) => b.textContent.trim());
 ok("首页章节卡也用小徽标", homeBadges.length >= 6 && homeBadges.every((t) => t.length <= 2), homeBadges.join(" "));
 // 模块导航的图标必须和章节徽标同一套样式（同一个 class + 配色）
 const modBadges = Array.prototype.filter.call(view.querySelectorAll(".chapter-card .cc-badge"),
-  (b) => /(^|\s)bg[1-8](\s|$)/.test(b.className));
+  (b) => (b.className.match(/cc-bg[1-8]/) || []).length > 0);
 ok("首页所有卡片徽标统一带配色", modBadges.length === view.querySelectorAll(".chapter-card .cc-badge").length,
    modBadges.length + " / " + view.querySelectorAll(".chapter-card .cc-badge").length);
 ok("模块图标与章节徽标同款 class", Array.prototype.every.call(view.querySelectorAll(".chapter-card .cc-badge"),
@@ -147,7 +147,7 @@ window.location.hash = "#/systems";
 window.dispatchEvent(new window.Event("hashchange"));
 const sysBadges = Array.prototype.map.call(view.querySelectorAll(".chapter-card .cc-badge"), (b) => b.textContent.trim());
 ok("系统页徽标同样带配色", sysBadges.length > 0 && Array.prototype.every.call(
-   view.querySelectorAll(".chapter-card .cc-badge"), (b) => /(^|\s)bg[1-8](\s|$)/.test(b.className)),
+   view.querySelectorAll(".chapter-card .cc-badge"), (b) => (b.className.match(/cc-bg[1-8]/) || []).length > 0),
    sysBadges.join(" "));
 window.location.hash = "#/story/ch3";
 window.dispatchEvent(new window.Event("hashchange"));

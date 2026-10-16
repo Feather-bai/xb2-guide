@@ -21,7 +21,7 @@ _CN_NUM = {"一": "1", "二": "2", "三": "3", "四": "4", "五": "5",
            "六": "6", "七": "7", "八": "8", "九": "9", "十": "10"}
 
 # 徽标配色（章 / 模块共用的同一套色板，由 style.css 里的 .cc-bg1…8 定义）
-COLORS = ["bg1", "bg2", "bg3", "bg4", "bg5", "bg6", "bg7", "bg8"]
+COLORS = ["cc-bg1", "cc-bg2", "cc-bg3", "cc-bg4", "cc-bg5", "cc-bg6", "cc-bg7", "cc-bg8"]
 
 
 def ch(cid, num, title, summary, place, keypoints, steps, diffs, quests):
