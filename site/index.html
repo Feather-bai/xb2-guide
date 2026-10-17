@@ -78,6 +78,25 @@
   <div class="search-results" id="searchResults"></div>
 </div>
 
+<!-- 悬浮互动地图（任意页面可展开，边看流程边对位置） -->
+<button class="mapdock-btn" id="mapDockBtn" type="button" aria-controls="mapDock" aria-expanded="false"
+        title="展开 / 收起互动地图">
+  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3L3 5.5v16L9 19l6 2 6-2.5v-16L15 5 9 3z"/><path d="M9 3v16M15 5v16"/></svg>
+  <span class="mapdock-label">地图</span>
+</button>
+<aside class="mapdock" id="mapDock" hidden aria-label="互动地图">
+  <div class="mapdock-head">
+    <div class="mapdock-title" id="mapDockTitle">互动地图</div>
+    <div class="mapdock-actions">
+      <a class="mapdock-link" id="mapDockGo" href="#/story/ch1">回到本章 ↗</a>
+      <button class="icon-btn mapdock-close" id="mapDockClose" type="button" aria-label="收起地图">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+  </div>
+  <div class="mapdock-body" id="mapDockBody"></div>
+</aside>
+
 <div class="toast" id="toast" hidden></div>
 
 <script src="data/index.js"></script>

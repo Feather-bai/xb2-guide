@@ -189,13 +189,103 @@
    * 章节 -> 该章地图卡片会列出哪些地图（与 renderChapterMap 内一致）
    * @returns {string[]} 地图 id 列表
    */
-  function chapterMaps(chapter) {
-    var areas = detectAreas(chapter).filter(function (a) { return (AREA_MAPS[a] || []).length; });
+  /** 某个章节在互动地图里应该出现哪些区域：正文里提到的（主线）+ 本章可接支线所在地图的区域（支线） */
+  function chapterAreaInfo(chapter) {
+    var mainAreas = detectAreas(chapter).filter(function (a) { return (AREA_MAPS[a] || []).length; });
+    var questAreas = [];      // 只因「本章可接支线」才带进来的区域
+    forEachQuestPoint(function (mapId, cid) {
+      if (cid !== chapter.id) return;
+      var mm = MAPS[mapId];
+      if (mm && mm.area && AREA_MAPS[mm.area] && mainAreas.indexOf(mm.area) === -1 && questAreas.indexOf(mm.area) === -1)
+        questAreas.push(mm.area);
+    });
+    // 主线区域里的图优先，支线带进来的排后面
+    return { main: mainAreas.slice(), quest: questAreas.slice(), all: mainAreas.concat(questAreas) };
+  }
+  function chapterAreas(chapter) { return chapterAreaInfo(chapter).all; }
+
+  /** 本章的地图 id，并标记哪些是「只因支线才带入」的 */
+  function chapterMapInfo(chapter) {
+    var info = chapterAreaInfo(chapter);
+    var questSet = {};
+    info.quest.forEach(function (a) { (AREA_MAPS[a] || []).forEach(function (id) { questSet[id] = 1; }); });
     var ids = [];
-    areas.forEach(function (a) {
+    info.all.forEach(function (a) {
       (AREA_MAPS[a] || []).forEach(function (id) { if (ids.indexOf(id) === -1) ids.push(id); });
     });
-    return ids;
+    // 主线区域也有的图，不算「支线专属」
+    info.main.forEach(function (a) { (AREA_MAPS[a] || []).forEach(function (id) { delete questSet[id]; }); });
+    return { ids: ids, questMaps: questSet, areas: info.all };
+  }
+
+  function chapterMaps(chapter) { return chapterMapInfo(chapter).ids; }
+
+  /** 本章可接的支线（按地图接取点 + 套娃关系），附带父任务信息 */
+  function chapterQuests(chapter) {
+    var out = [];
+    var seen = {};
+    var qByName = {};
+    (window.X2.quests || []).forEach(function (q) { qByName[q.name] = q; });
+    var kids = nestedChildren();
+
+    // 1) 本章可接：地图接取点的 .c === 本章
+    forEachQuestPoint(function (mapId, cid, qname) {
+      if (cid !== chapter.id || seen[qname]) return;
+      seen[qname] = 1;
+      var q = qByName[qname] || {};
+      out.push({
+        name: qname, parent: parentQuest(q), map: mapId,
+        place: (q.place || []).join("・"), cat: q.cat || "",
+        kids: (kids[qname] || []).slice(),
+      });
+    });
+    // 2) 套娃支线：父任务在本章可接的，把子任务一并列出来（标在父任务下面）
+    out.forEach(function (it) {
+      (it.kids || []).forEach(function (cn) {
+        if (seen[cn]) return;
+        seen[cn] = 1;
+        var cq = qByName[cn] || {};
+        out.push({ name: cn, parent: it.name, map: it.map, place: (cq.place || []).join("・"), cat: cq.cat || "", kids: [] });
+      });
+    });
+    // 顺序：父任务在前，它的子任务紧随其后
+    var ordered = [];
+    var done = {};
+    out.forEach(function (it) {
+      if (it.parent && !done[it.parent]) return;   // 等父任务先出现
+      if (done[it.name]) return;
+      done[it.name] = 1; ordered.push(it);
+      (it.kids || []).forEach(function (cn) {
+        var c = out.filter(function (x) { return x.name === cn; })[0];
+        if (c && !done[c.name]) { done[c.name] = 1; ordered.push(c); }
+      });
+    });
+    out.forEach(function (it) { if (!done[it.name]) { done[it.name] = 1; ordered.push(it); } });
+    return ordered;
+  }
+
+  /* 套娃支线关系：父任务名 -> [子任务名] */
+  var _nestedMap = null;
+  function nestedChildren() {
+    if (_nestedMap) return _nestedMap;
+    _nestedMap = {};
+    (window.X2.quests || []).forEach(function (q) {
+      var m = /「(.+?)」\s*过程中接取/.exec(q.cond || "");
+      if (m) (_nestedMap[m[1]] = _nestedMap[m[1]] || []).push(q.name);
+    });
+    return _nestedMap;
+  }
+  /** 若 q 是套娃任务，返回父任务名，否则 "" */
+  function parentQuest(q) {
+    var m = /「(.+?)」\s*过程中接取/.exec((q && q.cond) || "");
+    return m ? m[1] : "";
+  }
+
+  /* 遍历所有任务接取点（来自 mapsData.quest[]） */
+  function forEachQuestPoint(fn) {
+    (MD.maps || []).forEach(function (m) {
+      (m.quest || []).forEach(function (p) { if (p.c) fn(m.id, p.c, p.t); });
+    });
   }
 
   /**
@@ -204,7 +294,7 @@
    * @returns {HTMLElement}
    */
   function renderChapterMap(chapter) {
-    var areas = detectAreas(chapter).filter(function (a) { return (AREA_MAPS[a] || []).length; });
+    var areas = chapterAreas(chapter);
     var box = el("section", "mapcard");
     box.id = "mapcard-" + chapter.id;
 
@@ -215,11 +305,13 @@
     }
 
     // 该章节涉及的地图（保持区域顺序）
-    var mapIds = chapterMaps(chapter);
+    var mi = chapterMapInfo(chapter);
+    var mapIds = mi.ids;
 
     var firstId = mapIds[0];
-    // chap: 当前章节 id；questAll: 任务接取点是只看本章解锁的，还是全看
-    var state = { id: firstId, types: defaultTypes(), key: "", chap: chapter.id, questAll: false };
+    // chap: 当前章节 id；questAll: 任务接取点是只看本章解锁的，还是全看；
+    // questMaps: 只因「本章可接支线」才带入的地图（标签标黄，与主线区分）
+    var state = { id: firstId, types: defaultTypes(), key: "", chap: chapter.id, questAll: false, questMaps: mi.questMaps };
 
     box.innerHTML =
       '<div class="mapcard-head">' +
@@ -232,6 +324,7 @@
       '<div class="map-toolbar map-toolbar2">' +
         '<div class="map-maps" role="tablist"></div>' +
       "</div>" +
+      '<div class="map-legend"><span><i class="lg-main"></i>主线地图</span><span><i class="lg-side"></i>本章支线所在地图</span></div>' +
       '<div class="map-filters">' +
         '<div class="map-types"></div>' +
         '<input class="map-search" type="search" placeholder="筛选标记点 / 搜道具、NPC…">' +
@@ -280,18 +373,30 @@
 
     /* 地图标签：按 menuGroup 分组后只留末尾序号（如 格尔特蒙特 f01/f03 → 格尔特蒙特1 / 格尔特蒙特3，
        托里格镇 c_01 → 托里格镇1）。仅在「同一分组内」序号撞车时才退回完整后缀区分。 */
+    /* 地图标签：按 menuGroup 分组后只留末尾序号（如 格尔特蒙特 f01/f03 → 格尔特蒙特1 / 格尔特蒙特3，
+       托里格镇 c_01 → 托里格镇1）。
+       - 分组里只有一张图 -> 只显示分组名
+       - 同一分组内序号撞车时，用「尾段的字母前缀」区分（如 腹部 floor_01 / floor_b01 → 腹部1 / 腹部B1）
+       - 绝不把 ma07a_b_floor_01 这种内部 id 露给用户 */
     function groupLabels(ids) {
       var P = ids.map(function (id) {
         var m = MAPS[id] || {};
-        var s = id.replace(/^(dlc3_)?/, "").replace(/(shipoff|lodoff)$/, "");
-        var mm = s.match(/(\d+)([a-z]*)$/i);
-        return { grp: m.group || m.area || "", num: mm ? +mm[1] : null, post: mm ? mm[2].toLowerCase() : "", full: s };
+        var s = id.replace(/^(dlc3_)?ma\d+a_/i, "").replace(/(shipoff|lodoff)$/i, "");
+        var seg = s.split("_").pop();                       // floor_01 -> 01 / floor_b01 -> b01 / f01 -> f01
+        var mm = seg.match(/^([a-z]*)(\d+)$/i);
+        return { grp: m.group || m.area || "", num: mm ? +mm[2] : null, pre: mm ? mm[1].toLowerCase() : "", seg: seg };
       });
-      var count = {};
-      P.forEach(function (p) { if (p.num != null) { var k = p.grp + "|" + p.num + p.post; count[k] = (count[k] || 0) + 1; } });
+      var perGroup = {};
+      P.forEach(function (p) { perGroup[p.grp] = (perGroup[p.grp] || 0) + 1; });
+      var collide = {};
+      P.forEach(function (p) { if (p.num != null) { var k = p.grp + "|" + p.num; collide[k] = (collide[k] || 0) + 1; } });
       return P.map(function (p) {
-        if (p.num == null) return "";     // 没有序号的地图只显示分组名（如「废弃工厂」）
-        return count[p.grp + "|" + p.num + p.post] > 1 ? p.full : p.num + p.post;
+        if (p.num == null) return "";
+        if (perGroup[p.grp] === 1) return "";
+        var k = p.grp + "|" + p.num;
+        // 撞车：带上前缀字母（无前缀的那个保持纯数字）
+        if (collide[k] > 1) return (p.pre ? p.pre.toUpperCase() : "") + p.num;
+        return p.num;
       });
     }
 
@@ -303,9 +408,13 @@
         var m = MAPS[id];
         if (!m) return;
         var label = (m.group || m.area) + labs[i];
-        var b = el("button", "chip" + (id === state.id ? " blue" : ""), esc(label));
+        // 只因「本章可接支线」才带入的地图标黄，主线地图标红；当前选中的用实心高亮
+        var side = state.questMaps && state.questMaps[id] ? " side" : " main";
+        var cls = "chip" + side + (id === state.id ? (side === " side" ? " side-on" : " blue") : "");
+        var b = el("button", cls, esc(label));
         b.type = "button";
-        b.title = m.area + " · " + m.id + "（" + m.w + "×" + m.h + "）";
+        b.title = m.area + " · " + m.id + "（" + m.w + "×" + m.h + "）" +
+          (side === " side" ? " · 本章支线所在地图" : "");
         b.addEventListener("click", function () { state.id = id; renderMaps(); showMap(); });
         mapBox.appendChild(b);
       });
@@ -774,6 +883,7 @@
       var placeHit = mm.area && placeText.indexOf(mm.area) > -1;
       var groupHit = mm.group && (placeText.indexOf(mm.group) > -1 || text.indexOf(mm.group) > -1);
       var score = n + (placeHit ? 200000 : 0) + (groupHit ? 50000 : 0);
+      if (state.questMaps[id]) score -= 300000;   // 优先选主线地图，支线带入的地图只作补充
       if (!best || score > best.score) best = { id: id, score: score, n: n, area: mm.area, group: mm.group };
     });
     if (best) state.id = best.id;
@@ -983,6 +1093,7 @@
   window.X2Map = {
     renderChapterMap: renderChapterMap, mountChapters: mountChapters, detectAreas: detectAreas,
     MAPS: MAPS, markerLatLng: markerLatLng, chapterMaps: chapterMaps,
+    chapterAreas: chapterAreas, chapterMapInfo: chapterMapInfo, chapterQuests: chapterQuests,
     focusMapTarget: focusMapTarget, locateTargets: locateTargets, focusIndex: focusIndex,
     openPicker: openPicker, locatableHere: locatableHere, locatableAnywhere: locatableAnywhere,
   };

@@ -99,6 +99,16 @@ window.dispatchEvent(new window.Event("hashchange"));
 ok("图鉴异刃列表渲染", view.querySelectorAll(".dex").length > 50, view.querySelectorAll(".dex").length + " 项");
 const bladeLinks = Array.from(view.querySelectorAll(".dex")).slice(0, 5).map((a) => a.getAttribute("href"));
 ok("图鉴条目外链 wiki", bladeLinks.every((u) => u && u.indexOf("xenoblade2.cn") > -1), bladeLinks.join(" "));
+// 图鉴分类切换：#/codex?cat=xxx 必须真的生效（路由曾把 parts 当 params 传进来）
+window.location.hash = "#/codex?cat=auxcore";
+window.dispatchEvent(new window.Event("hashchange"));
+const auxDex = view.querySelectorAll(".dex").length;
+const auxActive = (view.querySelector("[data-codex].blue") || {}).getAttribute
+  ? view.querySelector("[data-codex].blue").getAttribute("data-codex") : "";
+ok("图鉴可切到辅助核心", auxDex === 35 && auxActive === "auxcore", auxDex + " 项 / 当前 " + auxActive);
+window.location.hash = "#/codex?cat=accessory";
+window.dispatchEvent(new window.Event("hashchange"));
+ok("图鉴可切到饰品", view.querySelectorAll(".dex").length === 33, view.querySelectorAll(".dex").length + " 项");
 
 // 遍历全部章节：要点等结构化内容不能被渲染成 [object Object]
 let objLeak = 0, keypointTitles = 0, emptyNotes = 0;
@@ -233,6 +243,45 @@ if (mapHost) {
     window.dispatchEvent(new window.Event("hashchange"));
     return r;
   })());
+  // 地图标签不能露出内部 id（如 ma07a_b_floor_01）
+  const allLabels = [];
+  ["ch1", "ch2", "ch3", "ch4", "ch5", "ch6", "ch7", "ch8", "ch9", "final"].forEach(function (cid) {
+    window.location.hash = "#/story/" + cid;
+    window.dispatchEvent(new window.Event("hashchange"));
+    Array.prototype.forEach.call(document.querySelectorAll(".map-maps .chip"), function (c) {
+      allLabels.push(c.textContent.trim());
+      // 切到每个区域，才能枚举所有地图
+    });
+    Array.prototype.forEach.call(document.querySelectorAll(".map-areas .chip"), function (a) {
+      a.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+      Array.prototype.forEach.call(document.querySelectorAll(".map-maps .chip"), function (c) {
+        allLabels.push(c.textContent.trim());
+      });
+    });
+  });
+  window.location.hash = "#/story/ch2";
+  window.dispatchEvent(new window.Event("hashchange"));
+  const rawLabels = allLabels.filter(function (t) { return /ma\d+a_|floor_|ship_|_f\d|\bdlc3/.test(t); });
+  ok("地图标签里没有内部 id 残留", rawLabels.length === 0, rawLabels.slice(0, 5).join(" / "));
+  // 本章可接的支线所在地图，必须出现在本章
+  ok("第三章能看到第二章地图（跨章支线）", (function () {
+    var maps = window.X2Map.chapterMaps({ id: "ch3" });
+    return maps.length > 0 && maps.indexOf("ma05a_c_01") > -1;
+  })());
+  // 只因支线才带入的地图要被单独标出来（界面上标黄）
+  ok("能区分「支线带入」的地图", (function () {
+    var info = window.X2Map.chapterMapInfo({ id: "ch3" });
+    return Object.keys(info.questMaps).length > 0 && info.ids.length > 0;
+  })());
+  // 本章可接支线：按地图接取点补齐，且套娃任务挂在父任务后面
+  ok("本章可接支线由地图接取点生成", (function () {
+    var list = window.X2Map.chapterQuests({ id: "ch2" });
+    var names = list.map(function (x) { return x.name; });
+    var pi = names.indexOf("托里格的起重机破坏事件");
+    var kid = list.filter(function (x) { return x.parent === "托里格的起重机破坏事件"; }).length;
+    return list.length >= 10 && pi > -1 && kid === 2;   // 父任务下挂 2 个套娃任务
+  })());
+  ok("悬浮地图按钮存在", !!document.getElementById("mapDockBtn") && !!document.getElementById("mapDock"));
   // 官方任务目标（与攻略流程并列可切换）
   const qf = X2.questFlows || {};
   ok("官方任务目标数据", Object.keys(qf).length > 100, Object.keys(qf).length + " 个任务");

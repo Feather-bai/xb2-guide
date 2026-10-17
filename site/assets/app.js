@@ -401,7 +401,18 @@
         return '<span class="chip">◉ ' + esc(p) + "</span>";
       }).join("") + "</div>" : "") + "</section>");
 
-    if (ch.quests && ch.quests.length) {
+    // 本章可接支线：以地图上的任务接取点为准（比手写列表完整），并把套娃支线挂在父任务下面
+    var cq = (window.X2Map && window.X2Map.chapterQuests) ? window.X2Map.chapterQuests(ch) : [];
+    if (cq.length) {
+      h.push('<div class="card tight"><h3 style="margin:0 0 6px">本章可接支线 <span class="hint-n">' + cq.length +
+        ' 条 · 按地图接取点整理，套娃任务缩进显示</span></h3><div class="chiprow qflow">' +
+        cq.map(function (it, i) {
+          var kid = it.parent && i > -1;
+          return '<button class="chip' + (it.parent ? " qnested" : "") + '" type="button" data-quest="' + esc(it.name) + '"' +
+            ' title="' + esc([it.cat, it.place, it.parent ? "套娃：「" + it.parent + "」过程中接取" : ""].filter(Boolean).join(" · ")) + '">' +
+            (it.parent ? '<span class="qn-di">↳</span>' : "") + esc(it.name) + "</button>";
+        }).join("") + "</div></div>");
+    } else if (ch.quests && ch.quests.length) {
       h.push('<div class="card tight"><h3 style="margin:0 0 6px">本章可接支线</h3><div class="chiprow">' +
         ch.quests.map(function (n) {
           return '<button class="chip" type="button" data-quest="' + esc(n) + '" style="cursor:pointer">' + esc(n) + "</button>";
@@ -454,6 +465,8 @@
 
   /* ------------------------------------------------------------ 任务库 */
   var questFilter = { cat: "全部", key: "" };
+  /* 悬浮互动地图：最近浏览的章节（离开章节页后仍显示这一章） */
+  var dockChapterId = null;
   function viewQuests(params) {
     if (params && params.q) questFilter.key = params.q;
     var cats = ["全部", "主线任务", "普通任务", "异刃任务", "DLC任务"];
@@ -645,7 +658,8 @@
     story: function (parts, params) { return parts[1] ? viewChapter(parts[1]) : viewStoryList(); },
     quests: viewQuests,
     systems: function (parts) { return parts[1] ? viewSystem(parts[1]) : viewSystems(); },
-    codex: viewCodex,
+    // 路由签名的第一个参数是 parts、第二个才是 params，这里必须显式取第二个
+    codex: function (parts, params) { return viewCodex(params); },
     maps: viewMaps,
     compare: viewCompare,
     mag: function (parts, params) { return parts[1] ? viewMagPage(parts[1]) : viewMagList(params); },
@@ -669,6 +683,8 @@
   function render() {
     var r = parseHash();
     var top = r.parts[0] || "home";
+    // 记住最近浏览的章节，供悬浮地图使用（离开章节页后仍显示这一章）
+    if (top === "story" && r.parts[1]) dockChapterId = r.parts[1];
     var fn = routes[top];
     var view = $("#view");
     if (!fn) { view.innerHTML = viewHome(); top = "home"; }
@@ -834,8 +850,55 @@
     setTheme(document.documentElement.dataset.theme === "light" ? "dark" : "light");
   });
 
+  /* -------------------------------------------------- 悬浮互动地图（可收起） */
+  var dockOpen = false;
+
+  /** 当前应该展示哪一章的地图：章节页用本章；其它页面用最近一次查看的章节，默认第一章 */
+  function dockChapter() {
+    var r = parseHash();
+    var chapters = X2.chapters || [];
+    if (r.parts[0] === "story" && r.parts[1]) dockChapterId = r.parts[1];
+    var id = dockChapterId || (chapters[0] && chapters[0].id);
+    return chapters.filter(function (c) { return c.id === id; })[0] || chapters[0];
+  }
+
+  function buildDock() {
+    var body = $("#mapDockBody");
+    var ch = dockChapter();
+    if (!ch || !window.X2Map) {
+      body.innerHTML = '<div class="map-empty">地图数据未加载。</div>';
+      return;
+    }
+    body.innerHTML = "";
+    var card = window.X2Map.renderChapterMap(ch);
+    card.classList.add("mapcard-in-dock");
+    body.appendChild(card);
+    $("#mapDockTitle").textContent = ch.num + " · 互动地图";
+    $("#mapDockGo").setAttribute("href", "#/story/" + ch.id);
+    var raf = window.requestAnimationFrame || function (fn) { return setTimeout(fn, 0); };
+    raf(function () {
+      try { card._showMap(); } catch (e) {}
+      setTimeout(function () { try { card._showMap(); } catch (e) {} }, 80);
+    });
+  }
+
+  function setDock(open) {
+    dockOpen = !!open;
+    var dock = $("#mapDock"), btn = $("#mapDockBtn");
+    dock.hidden = !dockOpen;
+    btn.classList.toggle("is-open", dockOpen);
+    btn.setAttribute("aria-expanded", String(dockOpen));
+    document.body.classList.toggle("dock-open", dockOpen);
+    if (dockOpen) buildDock();
+  }
+  $("#mapDockBtn").addEventListener("click", function () { setDock(!dockOpen); });
+  $("#mapDockClose").addEventListener("click", function () { setDock(false); });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && dockOpen && $("#modal").hidden && $("#searchPanel").hidden) setDock(false);
+  });
+
   /* ------------------------------------------------------------ 启动 */
   buildNav();
   render();
-  window.X2App = { openModal: openModal, closeModal: closeModal, showQuest: showQuest, render: render };
+  window.X2App = { openModal: openModal, closeModal: closeModal, showQuest: showQuest, render: render, openDock: function () { setDock(true); } };
 })();
