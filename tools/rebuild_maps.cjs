@@ -36,15 +36,24 @@ for (const [qname, pts] of Object.entries(questPoints))
   for (const p of pts) (questMarkers[p.m] = questMarkers[p.m] || []).push({ t: qname, n: p.npc || "", c: p.ch || "", x: p.x, z: p.z });
 
 // 图层 -> 每张地图的标记点（a=Areas 只用于归图，不写进地图数据）
+/* 异常标记清理：敌人 / NPC 找不到中文名称、只剩内部 id（如 ma05a_a01_02、npc41300011_01）
+   的条目直接丢弃，不做占位保留。中文名判定：至少含一个汉字。 */
+const hasCJK = (s) => /[㐀-鿿]/.test(String(s || ""));
+const isNamed = (it) => hasCJK(it && it.n);
+const CLEAN_LAYERS = { enemy: true, npc: true };
+
 const perMap = {};
+const dropped = { enemy: 0, npc: 0 };
 for (const kind of LAYERS)
   for (const it of layers[kind] || []) {
+    if (CLEAN_LAYERS[kind] && !isNamed(it)) { dropped[kind]++; continue; }
     if (!it.a || !it.a.length) continue;
     for (const a of it.a) {
       const b = perMap[a] || (perMap[a] = Object.fromEntries(LAYERS.map((k) => [k, []])));
       b[kind].push(it);
     }
   }
+
 const strip = (it) => { const { a, ...rest } = it; return rest; };
 
 const maps = Object.keys(mapinfo).map((name) => {
@@ -73,7 +82,7 @@ for (const a of Object.keys(areas)) areas[a].sort();
    itemIndex: 名 -> [[地图 id, 查找键, 图层]]（采集点按键=类型名，打捞点按键=点名称） */
 const npcIndex = {};
 for (const n of layers.npc || []) {
-  if (!n.n) continue;
+  if (!isNamed(n)) continue;
   const s = (npcIndex[n.n] = npcIndex[n.n] || new Set());
   for (const mp of n.a || []) s.add(mp);
 }
@@ -102,7 +111,7 @@ for (const k of Object.keys(npcIndex)) npcIndexOut[k] = Array.from(npcIndex[k]);
 // 敌人名 -> [地图 id]（在该地图的 enemy 图层里按 .n === 名 找标记）
 const enemyIndex = {};
 for (const e of layers.enemy || []) {
-  if (!e.n) continue;
+  if (!isNamed(e)) continue;
   const s = (enemyIndex[e.n] = enemyIndex[e.n] || new Set());
   for (const mp of e.a || []) s.add(mp);
 }
@@ -138,3 +147,4 @@ for (const k of LAYERS) {
 }
 console.log(`maps.js ${(Buffer.byteLength(js) / 1024).toFixed(1)} KB（gzip ${(gz.length / 1024).toFixed(1)} KB）`);
 console.log(`反向索引：NPC 名 ${Object.keys(npcIndexOut).length} / 道具名 ${Object.keys(itemIndex).length} / 敌人名 ${Object.keys(enemyIndexOut).length} / 任务接取点 ${Object.keys(questIndex).length}`);
+console.log(`异常标记清理：敌人 ${dropped.enemy} 条、NPC ${dropped.npc} 条（无中文名，仅有内部 id）已丢弃`);

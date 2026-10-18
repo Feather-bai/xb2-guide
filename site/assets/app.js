@@ -200,9 +200,9 @@
         "或在本站任务库中按关键词搜索。</p>";
     }
     var h = [];
-    h.push('<h2>' + esc(q.name) + "</h2>");
+    h.push('<h2 class="' + (q.cat === "异刃任务" ? "qm-blade" : "") + '">' + esc(q.name) + "</h2>");
     var sub = [];
-    if (q.cat) sub.push('<span class="tag ' + (q.cat === "异刃任务" ? "blue" : q.cat === "主线任务" ? "red" : q.cat === "DLC任务" ? "gold" : "grey") + '">' + esc(q.cat) + "</span>");
+    if (q.cat) sub.push('<span class="tag ' + (q.cat === "异刃任务" ? "blade" : q.cat === "主线任务" ? "red" : q.cat === "DLC任务" ? "gold" : "grey") + '">' + esc(q.cat) + "</span>");
     if (q.dlc) sub.push('<span class="tag gold">DLC 限定</span>');
     if (q.id) sub.push('<span class="tag mono">' + esc(q.id) + "</span>");
     if (q.src && q.src.length) sub.push('<span class="srcbadge">来源：' + esc(q.src.join(" / ")) + "</span>");
@@ -212,7 +212,7 @@
     if (q.place && q.place.length) kv.push(["地点", q.place.join("・")]);
     if (q.npc) kv.push(["委托人", q.npc]);
     if (q.blade) kv.push(["对应异刃", q.blade]);
-    if (q.cond) kv.push(["解锁条件", q.cond]);
+    if (q.cond) kv.push(["解锁条件", isBladeQuest(q) ? bladeCondText(q) : q.cond]);
     // 有接取点数据时，给一个直接跳到互动地图的按钮（第 3 个元素 = 已经是 HTML，不要再转义）
     if ((X2.mapsData || {}).questIndex && X2.mapsData.questIndex[q.name])
       kv.push(["接取点", '<button type="button" class="qlink maplink quest" data-mk="quest" data-mn="' + esc(q.name) + '">在互动地图上查看</button>', true]);
@@ -405,12 +405,19 @@
     var cq = (window.X2Map && window.X2Map.chapterQuests) ? window.X2Map.chapterQuests(ch) : [];
     if (cq.length) {
       h.push('<div class="card tight"><h3 style="margin:0 0 6px">本章可接支线 <span class="hint-n">' + cq.length +
-        ' 条 · 按地图接取点整理，套娃任务缩进显示</span></h3><div class="chiprow qflow">' +
+        ' 条 · 按地图接取点整理；<i class="lg-blade"></i>异刃任务 <i class="lg-side"></i>套娃支线 · 点左侧圆点标记完成</span></h3><div class="chiprow qflow">' +
         cq.map(function (it, i) {
-          var kid = it.parent && i > -1;
-          return '<button class="chip' + (it.parent ? " qnested" : "") + '" type="button" data-quest="' + esc(it.name) + '"' +
-            ' title="' + esc([it.cat, it.place, it.parent ? "套娃：「" + it.parent + "」过程中接取" : ""].filter(Boolean).join(" · ")) + '">' +
-            (it.parent ? '<span class="qn-di">↳</span>' : "") + esc(it.name) + "</button>";
+          var blade = it.cat === "异刃任务";
+          var done = window.X2Map && window.X2Map.isQuestDone ? window.X2Map.isQuestDone(it.name) : false;
+          var cls = "chip qitem" + (it.parent ? " qnested" : "") + (blade ? " qblade" : "") + (done ? " qdone" : "");
+          return '<span class="' + cls + '"' +
+            ' title="' + esc([it.cat, it.place, it.blade ? "异刃：" + it.blade : "", it.parent ? "套娃：「" + it.parent + "」过程中接取" : ""].filter(Boolean).join(" · ")) + '">' +
+            '<button type="button" class="qdone-btn" data-quest-done="' + esc(it.name) + '" title="' +
+            (done ? "已完成，点击撤销" : "标记为已完成") + '" aria-pressed="' + (done ? "true" : "false") + '">' +
+            (done ? "✓" : "") + "</button>" +
+            '<button type="button" class="qitem-name" data-quest="' + esc(it.name) + '">' +
+            (it.parent ? '<span class="qn-di">↳</span>' : "") + esc(it.name) +
+            (blade && it.blade ? '<span class="qn-blade">' + esc(it.blade) + "</span>" : "") + "</button></span>";
         }).join("") + "</div></div>");
     } else if (ch.quests && ch.quests.length) {
       h.push('<div class="card tight"><h3 style="margin:0 0 6px">本章可接支线</h3><div class="chiprow">' +
@@ -467,11 +474,30 @@
   var questFilter = { cat: "全部", key: "" };
   /* 悬浮互动地图：最近浏览的章节（离开章节页后仍显示这一章） */
   var dockChapterId = null;
+
+  /* 异刃任务：解锁条件里必须明示「需先解锁对应异刃」。
+     原数据只写了「XX牵绊圆环第N阶段已解锁」，缺了最前面的这层前置。 */
+  var BLADE_UNLOCK_PREFIX = "需先解锁对应异刃";
+  function bladeCondText(q) {
+    var cond = q.cond || "";
+    if (!q.blade) return cond;
+    if (cond.indexOf(BLADE_UNLOCK_PREFIX) > -1) return cond;
+    return BLADE_UNLOCK_PREFIX + "「" + q.blade + "」" + (cond ? "；" + cond : "");
+  }
+  /* 清理条件文本里给链接用的 [[...]] 标记，用于列表展示 */
+  function plainCond(s) {
+    return String(s || "").replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, function (_, t, l) {
+      return l || t.split(":").pop();
+    });
+  }
+  function isBladeQuest(q) { return q && q.cat === "异刃任务"; }
+
   function viewQuests(params) {
     if (params && params.q) questFilter.key = params.q;
-    var cats = ["全部", "主线任务", "普通任务", "异刃任务", "DLC任务"];
+    var cats = ["全部", "主线任务", "支线任务", "异刃任务", "DLC任务"];
     var list = (X2.quests || []).filter(function (q) {
-      if (questFilter.cat !== "全部" && q.cat !== questFilter.cat) return false;
+      if (questFilter.cat === "支线任务") { if (q.cat === "主线任务") return false; }
+      else if (questFilter.cat !== "全部" && q.cat !== questFilter.cat) return false;
       if (questFilter.key) {
         var k = questFilter.key.toLowerCase();
         var hay = [q.name, q.id, q.cond, q.npc, q.blade, (q.place || []).join(" ")].join(" ").toLowerCase();
@@ -479,9 +505,12 @@
       }
       return true;
     });
-    var h = ['<section class="hero"><h1>任务库</h1><p>共 ' + (X2.quests || []).length + ' 条任务。点击任意任务可打开浮窗查看条件、流程与报酬；名称末尾带 ↗ 的会跳到 wiki 原页。</p></section>'];
+    var h = ['<section class="hero"><h1>任务库</h1><p>共 ' + (X2.quests || []).length +
+      ' 条任务。主线任务只出现在「主线任务」栏；异刃任务用紫色标出，解锁条件已补上「需先解锁对应异刃」。</p></section>'];
     h.push('<div class="card tight"><div class="chiprow">' + cats.map(function (c) {
-      var n = c === "全部" ? (X2.quests || []).length : (X2.quests || []).filter(function (q) { return q.cat === c; }).length;
+      var n = c === "全部" ? (X2.quests || []).length
+        : c === "支线任务" ? (X2.quests || []).filter(function (q) { return q.cat !== "主线任务"; }).length
+        : (X2.quests || []).filter(function (q) { return q.cat === c; }).length;
       return '<button class="chip' + (questFilter.cat === c ? " blue" : "") + '" type="button" data-qcat="' + esc(c) + '">' +
         esc(c) + " " + n + "</button>";
     }).join("") + "</div>" +
@@ -489,9 +518,13 @@
 
     h.push('<div class="list">');
     list.slice(0, 400).forEach(function (q) {
-      h.push('<button class="list-item" type="button" data-quest="' + esc(q.name) + '">' +
-        '<span class="li-main"><span class="li-name">' + esc(q.name) + "</span>" +
-        '<span class="li-sub">' + esc([q.cat, (q.place || []).join("・"), q.cond].filter(Boolean).join(" ｜ ").slice(0, 90)) + "</span></span>" +
+      var blade = isBladeQuest(q);
+      h.push('<button class="list-item' + (blade ? " is-blade" : "") + '" type="button" data-quest="' + esc(q.name) + '">' +
+        '<span class="li-main"><span class="li-name">' + esc(q.name) +
+        (blade ? '<span class="tag blade-tag">' + esc(q.blade ? "异刃任务 · " + q.blade : "异刃任务") + "</span>" : "") +
+        "</span>" +
+        '<span class="li-sub">' + esc([blade ? "异刃任务" : q.cat, (q.place || []).join("・"),
+          plainCond(blade ? bladeCondText(q) : q.cond)].filter(Boolean).join(" ｜ ").slice(0, 96)) + "</span></span>" +
         '<span class="li-go">▸</span></button>');
     });
     h.push("</div>");
@@ -551,11 +584,21 @@
         esc((cats[k].title || k)) + " " + ((cats[k].items || []).length) + "</button>";
     }).join("") + "</div>");
     h.push('<div class="card tight"><div style="margin-bottom:9px"><input id="codexSearch" type="search" placeholder="筛选 ' + esc(data.title) + '…" style="width:100%;background:var(--card-2);border:1px solid var(--line);border-radius:9px;padding:9px 12px;color:var(--fg);font-size:15px"></div>');
-    h.push('<div class="dexgrid" id="dexgrid">' + (data.items || []).map(function (it) {
+    // 稀有异刃：本页只列异刃本身，牵绊圆环不在图鉴里重复承载，统一引导到该异刃的 wiki 页
+    var items = cur === "blade" ? (data.items || []).filter(function (it) { return !/\/牵绊圆环$/.test(it.name); }) : (data.items || []);
+    if (cur === "blade") {
+      h.push('<p class="codex-note">牵绊圆环（开环条件、节点效果）不在此页重复收录——点任意异刃进入其 wiki 页面，' +
+        '在页面内即可查看完整的牵绊圆环。</p>');
+    }
+    h.push('<div class="dexgrid" id="dexgrid">' + items.map(function (it) {
       var href = it.url || wikiUrl(it.name);
-      return '<a class="dex" href="' + esc(href) + '" target="_blank" rel="noopener" data-name="' + esc(it.name) + '">' +
+      var ring = cur === "blade" ? '<a class="dex-ring" href="' + esc(wikiUrl(it.name + "/牵绊圆环")) +
+        '" target="_blank" rel="noopener" title="在 wiki 查看牵绊圆环" data-name="' + esc(it.name) + '">圆环↗</a>' : "";
+      return '<span class="dex-wrap">' +
+        '<a class="dex" href="' + esc(href) + '" target="_blank" rel="noopener" data-name="' + esc(it.name) + '">' +
         '<span class="dex-ico">' + esc(it.icon || it.name.slice(0, 1)) + "</span>" +
-        '<span><span class="dex-nm">' + esc(it.name) + '</span><span class="dex-meta">' + esc(it.meta || "") + "</span></span></a>";
+        '<span><span class="dex-nm">' + esc(it.name) + '</span><span class="dex-meta">' + esc(it.meta || "") + "</span></span></a>" +
+        ring + "</span>";
     }).join("") + "</div></div>");
     return h.join("");
   }
@@ -744,6 +787,22 @@
   // 事件委托：动态渲染出来的控件
   document.addEventListener("click", function (e) {
     var t = e.target;
+    // 「本章可接支线」左侧圆点：切换完成状态
+    var qd = t.closest("[data-quest-done]");
+    if (qd) {
+      e.preventDefault();
+      var qn = qd.getAttribute("data-quest-done");
+      var M = window.X2Map;
+      if (M && M.setQuestDone) {
+        var on = !M.isQuestDone(qn);
+        M.setQuestDone(qn, on);
+        render();
+        // 地图上的任务接取点共用同一状态，刷新一下
+        var card = document.querySelector(".mapcard");
+        if (card && card._showMap) { try { card._showMap(); } catch (err) {} }
+      }
+      return;
+    }
     var qc = t.closest("[data-qcat]");
     if (qc) { questFilter.cat = qc.getAttribute("data-qcat"); render(); return; }
     var cx = t.closest("[data-codex]");

@@ -109,6 +109,13 @@ ok("图鉴可切到辅助核心", auxDex === 35 && auxActive === "auxcore", auxD
 window.location.hash = "#/codex?cat=accessory";
 window.dispatchEvent(new window.Event("hashchange"));
 ok("图鉴可切到饰品", view.querySelectorAll(".dex").length === 33, view.querySelectorAll(".dex").length + " 项");
+// 稀有异刃页不应重复承载牵绊圆环内容（改为外链引导）
+window.location.hash = "#/codex?cat=blade";
+window.dispatchEvent(new window.Event("hashchange"));
+const ringEntries = Array.from(view.querySelectorAll("#dexgrid .dex-nm")).filter((n) => /牵绊圆环/.test(n.textContent));
+ok("稀有异刃页不含牵绊圆环条目", ringEntries.length === 0, ringEntries.length + " 条");
+ok("稀有异刃条目提供圆环外链引导", view.querySelectorAll("#dexgrid .dex-ring").length > 40);
+ok("稀有异刃页有圆环说明", !!view.querySelector(".codex-note"));
 
 // 遍历全部章节：要点等结构化内容不能被渲染成 [object Object]
 let objLeak = 0, keypointTitles = 0, emptyNotes = 0;
@@ -280,6 +287,28 @@ if (mapHost) {
     var pi = names.indexOf("托里格的起重机破坏事件");
     var kid = list.filter(function (x) { return x.parent === "托里格的起重机破坏事件"; }).length;
     return list.length >= 10 && pi > -1 && kid === 2;   // 父任务下挂 2 个套娃任务
+  })());
+  // 章节支线与地图任务接取点共用同一份完成状态
+  ok("任务完成状态：章节列表与地图接取点同步", (function () {
+    var M = window.X2Map;
+    if (!M.setQuestDone || !M.isQuestDone) return false;
+    var name = "托里格的起重机破坏事件", mid = "ma05a_c_03";
+    var pt = (M.MAPS[mid].quest || []).filter(function (q) { return q.t === name; })[0];
+    if (!pt) return false;
+    M.setQuestDone(name, true);
+    var onMap = M.isDone(mid, "quest", pt);          // 地图侧能读到
+    M.setDone(mid, "quest", pt, false);              // 地图侧撤销
+    var offList = !M.isQuestDone(name);              // 列表侧同步
+    return onMap && offList;
+  })());
+  // 异刃任务的名称框要带紫色标识
+  ok("本章支线里异刃任务有独立样式类", (function () {
+    window.location.hash = "#/story/ch5";
+    window.dispatchEvent(new window.Event("hashchange"));
+    var n = document.querySelectorAll(".qflow .chip.qblade").length;
+    window.location.hash = "#/story/ch2";
+    window.dispatchEvent(new window.Event("hashchange"));
+    return n > 0;
   })());
   ok("悬浮地图按钮存在", !!document.getElementById("mapDockBtn") && !!document.getElementById("mapDock"));
   // 官方任务目标（与攻略流程并列可切换）

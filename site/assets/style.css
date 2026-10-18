@@ -35,7 +35,7 @@ html[data-theme="light"]{
   --line-soft:#e4eaf5;
   --fg:#152238;
   --fg-dim:#4a5a75;
-  --fg-mute:#6b7a93;
+  --fg-mute:#586a86;   /* 原 #6b7a93 在白底只有 4.35:1，提到 4.5+ */
   --accent:#0a8ea0;
   --accent-2:#c62f27;
   --accent-3:#b57f00;
@@ -510,7 +510,7 @@ html[data-theme="light"] .map-canvas{background:#dde6f2}
 .marker-cluster-small div,.marker-cluster-medium div,.marker-cluster-large div{background:rgba(77,208,225,.92);color:#04121a;font-weight:700}
 .marker-cluster span{line-height:30px}
 .x2pop{font-size:13px;line-height:1.5;min-width:150px}
-.x2pop-sub{color:#6b7a93;font-size:11.6px;margin-top:3px}
+.x2pop-sub{color:var(--fg-mute);font-size:11.6px;margin-top:3px}
 .x2pop-link{margin-top:5px}
 /* 采集点掉落表：左道具右概率 */
 .x2pop-drops{display:grid;grid-template-columns:1fr auto;gap:1px 14px;margin:3px 0 1px}
@@ -574,15 +574,97 @@ html[data-theme="light"] .leaflet-container .leaflet-control-attribution{backgro
   .mapdock-btn.is-open{bottom:auto;top:calc(var(--topbar-h) + 8px);right:8px}
 }
 
+/* 异刃任务：紫色（与主线红、普通支线蓝、DLC 金区分）。
+   色值：#c792ea 紫 vs 主线 #ff6b6b 红 vs 强调色 #0a8ea0 青，色相相差 > 90°。 */
+.tag.blade{color:#dfc2ff;border-color:color-mix(in srgb,#c792ea 55%,transparent);background:color-mix(in srgb,#c792ea 16%,transparent)}
+.list-item.is-blade{border-left:3px solid #c792ea}
+.list-item.is-blade:hover{border-color:#c792ea;background:color-mix(in srgb,#c792ea 8%,var(--card-2))}
+.list-item.is-blade .li-name{color:#e2ccff}
+.blade-tag{font-size:10.8px;font-weight:600;background:color-mix(in srgb,#c792ea 18%,transparent);
+  border:1px solid color-mix(in srgb,#c792ea 45%,transparent);color:#e2ccff;border-radius:5px;padding:0 6px;margin-left:6px;vertical-align:.08em;white-space:nowrap}
+/* 任务浮窗里异刃任务的标题也用紫色 */
+.modal-body h2.qm-blade{color:#e2ccff}
+
 /* 任务库 / 图鉴的筛选标签：选中的用实心强调色，与未选中的灰底明显区分 */
-.chip.blue{background:var(--accent);border-color:var(--accent);color:#04121a;font-weight:650;box-shadow:0 1px 8px color-mix(in srgb,var(--accent) 35%,transparent)}
+.chip.blue{background:var(--accent);border-color:var(--accent);color:#04121a;font-weight:650;box-shadow:0 2px 6px rgba(2,7,15,.35)}
 .chiprow .chip[data-qcat],.chiprow .chip[data-codex]{transition:background .15s,border-color .15s,color .15s}
 .chiprow .chip[data-qcat]:not(.blue):hover,.chiprow .chip[data-codex]:not(.blue):hover{border-color:var(--accent);color:var(--accent)}
 
-/* 本章可接支线：套娃任务缩进显示 */
+/* 本章可接支线：异刃任务紫色框、套娃任务缩进、左侧圆点标记完成 */
 .hint-n{font-size:11.4px;font-weight:400;color:var(--fg-mute);margin-left:6px}
+.hint-n .lg-blade,.hint-n .lg-side{display:inline-block;width:8px;height:8px;border-radius:2px;margin:0 3px 0 6px;vertical-align:0}
+.hint-n .lg-blade{background:#c792ea}
+.hint-n .lg-side{background:#ffc857}
+
+/* 每个支线：外层是胶囊，里面左圆点（完成）+ 名称按钮（打开浮窗） */
+.qflow .chip.qitem{display:inline-flex;align-items:center;gap:0;padding:0 10px 0 4px;cursor:default}
+.qflow .qitem-name{display:inline-flex;align-items:center;gap:5px;border:0;background:none;padding:4px 0;
+  font:inherit;font-size:12.5px;color:inherit;cursor:pointer}
+.qflow .qdone-btn{display:grid;place-items:center;width:17px;height:17px;margin-right:5px;flex:0 0 auto;
+  border-radius:50%;border:1.5px solid var(--line);background:transparent;color:transparent;
+  font-size:10.5px;line-height:1;cursor:pointer;padding:0}
+.qflow .qdone-btn:hover{border-color:var(--ok);color:color-mix(in srgb,var(--ok) 60%,transparent)}
+.qflow .qitem.qdone .qdone-btn{background:var(--ok);border-color:var(--ok);color:#04140c;font-weight:800}
+.qflow .qitem.qdone .qitem-name{opacity:.55;text-decoration:line-through}
 .qflow .chip.qnested{opacity:.86;border-style:dashed}
 .qn-di{opacity:.6;margin-right:3px}
+/* 异刃任务的名称框：紫色描边 + 淡紫底，和普通支线（中性底）明显区分。
+   文字颜色跟着主题走，浅色主题下淡紫字会看不清 */
+.qflow .chip.qblade{color:var(--fg);border-color:color-mix(in srgb,#c792ea 70%,transparent);
+  background:color-mix(in srgb,#c792ea 16%,var(--card-2));font-weight:600}
+html:not([data-theme="light"]) .qflow .chip.qblade{color:#e2ccff}
+.qflow .chip.qblade:hover{border-color:#c792ea;background:color-mix(in srgb,#c792ea 24%,var(--card-2))}
+.qn-blade{margin-left:5px;font-size:10.6px;opacity:.85;border-left:1px solid color-mix(in srgb,#c792ea 45%,transparent);padding-left:5px}
+
+/* 已完成的标记：变灰、去掉彩色、半透明 */
+.x2map-marker.is-done span{background:#5b6678 !important;color:#c9d3e2 !important;opacity:.7;border-color:rgba(8,18,32,.45)}
+.x2map-marker.is-done.dot span{opacity:.45}
+.leaflet-marker-icon.x2-is-done{opacity:.8}
+/* 弹窗里的「标记为已完成」 */
+.x2pop-done{margin-top:7px}
+.done-btn{cursor:pointer;font:inherit;font-size:12.2px;padding:4px 10px;border-radius:999px;
+  background:var(--card-2);border:1px solid var(--line);color:var(--fg-dim)}
+.done-btn:hover{border-color:var(--ok);color:var(--ok)}
+.done-btn.on{background:color-mix(in srgb,var(--ok) 22%,transparent);border-color:var(--ok);color:var(--ok)}
+/* 隐藏已完成 */
+.map-done-toggle{flex:0 0 auto;cursor:pointer;white-space:nowrap}
+.map-done-toggle.on{background:var(--ok);border-color:var(--ok);color:#04140c;font-weight:650}
+
+/* ==========================================================================
+   跨设备同步面板
+   ========================================================================== */
+.sync-panel{
+  position:fixed;right:14px;bottom:14px;z-index:92;width:min(420px, calc(100vw - 28px));
+  background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  padding:14px;box-shadow:0 12px 32px rgba(2,7,15,.4);
+  display:none;
+}
+.sync-panel.open{display:block}
+.sync-head{display:flex;align-items:center;justify-content:space-between;margin:0 0 8px}
+.sync-head strong{font-size:13px}
+.sync-close{width:30px;height:30px}
+.sync-close svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
+.sync-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 8px}
+.sync-row label{font-size:12.4px;color:var(--fg-dim);font-weight:600}
+#syncId{flex:1;min-width:140px;background:var(--card-2);border:1px solid var(--line);border-radius:8px;
+  padding:7px 10px;color:var(--fg);font-size:14px}
+.sync-note{margin:0 0 10px;font-size:11.6px;line-height:1.55;color:var(--fg-mute)}
+.sync-status{margin-right:auto;font-size:11.8px;color:var(--fg-mute)}
+.sync-status.is-error{color:var(--accent-2)}
+.sync-status.is-busy::after{content:" …";animation:sync-blink 1s steps(2) infinite}
+@keyframes sync-blink{50%{opacity:.35}}
+.btn.is-busy{opacity:.55;cursor:progress}
+.btn:disabled{cursor:not-allowed}
+@media (prefers-reduced-motion:reduce){ .sync-status.is-busy::after{animation:none} }
+@media (max-width:719px){ .sync-panel{left:8px;right:8px;bottom:8px;width:auto} }
+
+.codex-note{margin:0 0 10px;font-size:12px;line-height:1.55;color:var(--fg-mute)}
+/* 稀有异刃条目：主卡 + 右下角的「圆环↗」外链，牵绊圆环内容不在此页重复承载 */
+.dex-wrap{position:relative;display:block}
+.dex-wrap .dex{display:flex}
+.dex-ring{position:absolute;right:8px;bottom:6px;font-size:10.6px;color:var(--accent);
+  background:var(--card-2);border:1px solid var(--line);border-radius:6px;padding:1px 6px;white-space:nowrap}
+.dex-ring:hover{border-color:var(--accent)}
 
 /* ==========================================================================
    平板 / 桌面

@@ -1,3 +1,13 @@
 name = "xb2-guide"
 compatibility_date = "2025-01-01"
 pages_build_output_dir = "site"
+
+# 跨设备同步用的 KV 绑定（functions/api/sync.js 里读取 env.SYNC）。
+# 注意：绑定必须写在这里，wrangler 部署时才会带上；
+# 只在控制台改「项目级绑定」会被下一次 wrangler 部署覆盖。
+[[kv_namespaces]]
+binding = "SYNC"
+id = "671206d49fbb46f0be2eaf22dc524fe5"
+
+# 本地调试：
+#   npx wrangler pages dev site --kv SYNC

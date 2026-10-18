@@ -87,6 +87,18 @@ def main():
         print("缺少 CLOUDFLARE_API_TOKEN")
         return 1
 
+    # 安全检查：本脚本只上传静态资源，会把 functions/（/api/sync 跨设备同步）漏掉。
+    # 如果仓库里有 functions/，必须走 wrangler 部署，否则线上会变成「接口返回 index.html」。
+    funcs = os.path.join(WS, "functions")
+    if os.path.isdir(funcs) and "--allow-no-functions" not in sys.argv:
+        print("拒绝执行：检测到 functions/ 目录（Pages Functions，提供 /api/sync 同步接口）。")
+        print("本脚本只上传静态文件，会把 Functions 漏掉、导致跨设备同步失效。")
+        print("请改用：")
+        print("  npx wrangler pages deploy site --project-name xb2-guide --branch main --commit-dirty=true")
+        print("（需要 CLOUDFLARE_API_TOKEN 与 CLOUDFLARE_ACCOUNT_ID）")
+        print("确实只想发静态资源（会关掉同步）：加 --allow-no-functions 重跑。")
+        return 2
+
     st, d = call(f"/accounts/{ACCOUNT_ID}/pages/projects/{PROJECT}", token=token)
     if st != 200:
         print("读取项目失败:", st, str(d)[:300])

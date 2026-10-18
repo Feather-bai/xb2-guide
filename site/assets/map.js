@@ -107,12 +107,12 @@
 
   /* 图层定义：on 为初始是否勾选；key 对应数据字段；prefix 是 wiki 页面名前缀 */
   var TYPE_META = {
-    tbox: { key: "tbox", label: "宝箱", color: "#ffc857", glyph: "▣", on: true },
+    tbox: { key: "tbox", label: "宝箱", color: "#ffc857", glyph: "▣", on: true, done: true },
     colle: { key: "colle", label: "采集点", color: "#5ddc9a", glyph: "✦", on: true },
     salvage: { key: "salvage", label: "打捞点", color: "#4dd0e1", glyph: "⚓", on: true, prefix: "打捞点:" },
     enemy: { key: "enemy", label: "敌人", color: "#ff6b6b", glyph: "", dot: true, on: false, cluster: true, prefix: "敌人:" },
     npc: { key: "npc", label: "NPC", color: "#c792ea", glyph: "", dot: true, square: true, on: false, cluster: true, prefix: "NPC:" },
-    quest: { key: "quest", label: "任务接取点", color: "#ffa94d", glyph: "!", on: true },
+    quest: { key: "quest", label: "任务接取点", color: "#ffa94d", glyph: "!", on: true, done: true },
   };
   /* 深链种类 -> 图层键 / 反向索引 / 提示前缀 */
   var LINK_KINDS = {
@@ -141,6 +141,60 @@
     var names = ["晴", "雨", "雷", "沙"];
     var hit = names.filter(function (_, i) { return bit(i); });
     return hit.length ? hit.join(" / ") : "";
+  }
+
+  /* ---------------- 已完成标记的本地存储 ----------------
+     键：<地图id>|<图层>|<x>|<z>（坐标足够稳定，换顺序也不怕）。
+     这是站点侧的用户数据，会随用户 ID 同步到云端（见 app.js 的 X2Sync）。 */
+  var DONE_KEY = "x2.map.done";
+  var doneSet = null;
+  function loadDone() {
+    if (doneSet) return doneSet;
+    try { doneSet = JSON.parse(localStorage.getItem(DONE_KEY) || "{}"); } catch (e) { doneSet = {}; }
+    return doneSet;
+  }
+  function saveDone(silent) {
+    try { localStorage.setItem(DONE_KEY, JSON.stringify(doneSet || {})); } catch (e) {}
+    // silent：来自远端的整份替换，不需要再回推（避免拉取后立刻又上传造成抖动）
+    if (!silent && window.X2Sync && window.X2Sync.schedulePush) window.X2Sync.schedulePush();
+  }
+  function doneKey(mapId, layer, pt) { return mapId + "|" + layer + "|" + pt.x + "|" + pt.z; }
+  /* 任务级完成状态：一个任务可能有多处接取点，按任务名记（键前缀 quest:） */
+  function questDoneKey(name) { return "quest:" + name; }
+  function isQuestDone(name) { return !!loadDone()[questDoneKey(name)]; }
+  function setQuestDone(name, on) {
+    var d = loadDone(), k = questDoneKey(name);
+    if (on) d[k] = 1; else delete d[k];
+    saveDone();
+    return on;
+  }
+  function isDone(mapId, layer, pt) { return !!loadDone()[doneKey(mapId, layer, pt)] || (layer === "quest" && isQuestDone(pt && pt.t)); }
+  function setDone(mapId, layer, pt, on) {
+    var d = loadDone(), k = doneKey(mapId, layer, pt);
+    if (layer === "quest" && pt && pt.t) {
+      // 任务点按任务名记，地图上与「本章可接支线」共享同一个完成状态
+      setQuestDone(pt.t, on);
+      return on;
+    }
+    if (on) d[k] = 1; else delete d[k];
+    saveDone();
+    return on;
+  }
+  /* 供同步模块读写整份完成状态 */
+  function exportDone() { return JSON.parse(JSON.stringify(loadDone())); }
+  function importDone(obj) {
+    if (!obj || typeof obj !== "object") return;
+    doneSet = Object.assign({}, doneSet || {}, obj);
+    saveDone();
+  }
+  /* 用远端快照整份替换本机状态：能表达「取消勾选」（合并做不到删除） */
+  function replaceDone(obj) {
+    var next = {};
+    if (obj && typeof obj === "object") {
+      for (var k in obj) { if (Object.prototype.hasOwnProperty.call(obj, k) && obj[k]) next[k] = 1; }
+    }
+    doneSet = next;
+    saveDone(true);
   }
 
   var uid = 0;
@@ -220,23 +274,28 @@
 
   function chapterMaps(chapter) { return chapterMapInfo(chapter).ids; }
 
-  /** 本章可接的支线（按地图接取点 + 套娃关系），附带父任务信息 */
+  /** 本章可接的支线（按地图接取点 + 套娃关系）。
+      - 只收「支线」性质的类别：主线任务不得进入本章可接支线
+      - 附带父任务信息与解锁条件，供页面排序与显示 */
   function chapterQuests(chapter) {
     var out = [];
     var seen = {};
     var qByName = {};
     (window.X2.quests || []).forEach(function (q) { qByName[q.name] = q; });
     var kids = nestedChildren();
+    var isSide = function (q) { return q && q.cat !== "主线任务"; };
 
     // 1) 本章可接：地图接取点的 .c === 本章
     forEachQuestPoint(function (mapId, cid, qname) {
       if (cid !== chapter.id || seen[qname]) return;
+      var q = qByName[qname];
+      if (q && !isSide(q)) return;          // 主线任务不进支线栏
       seen[qname] = 1;
-      var q = qByName[qname] || {};
       out.push({
         name: qname, parent: parentQuest(q), map: mapId,
-        place: (q.place || []).join("・"), cat: q.cat || "",
-        kids: (kids[qname] || []).slice(),
+        place: ((q && q.place) || []).join("・"), cat: (q && q.cat) || "",
+        blade: (q && q.blade) || "", cond: (q && q.cond) || "",
+        kids: (kids[qname] || []).filter(function (n) { return isSide(qByName[n]); }),
       });
     });
     // 2) 套娃支线：父任务在本章可接的，把子任务一并列出来（标在父任务下面）
@@ -245,7 +304,7 @@
         if (seen[cn]) return;
         seen[cn] = 1;
         var cq = qByName[cn] || {};
-        out.push({ name: cn, parent: it.name, map: it.map, place: (cq.place || []).join("・"), cat: cq.cat || "", kids: [] });
+        out.push({ name: cn, parent: it.name, map: it.map, place: (cq.place || []).join("・"), cat: cq.cat || "", blade: cq.blade || "", cond: cq.cond || "", kids: [] });
       });
     });
     // 顺序：父任务在前，它的子任务紧随其后
@@ -311,7 +370,7 @@
     var firstId = mapIds[0];
     // chap: 当前章节 id；questAll: 任务接取点是只看本章解锁的，还是全看；
     // questMaps: 只因「本章可接支线」才带入的地图（标签标黄，与主线区分）
-    var state = { id: firstId, types: defaultTypes(), key: "", chap: chapter.id, questAll: false, questMaps: mi.questMaps };
+    var state = { id: firstId, types: defaultTypes(), key: "", chap: chapter.id, questAll: false, questMaps: mi.questMaps, hideDone: false };
 
     box.innerHTML =
       '<div class="mapcard-head">' +
@@ -328,6 +387,7 @@
       '<div class="map-filters">' +
         '<div class="map-types"></div>' +
         '<input class="map-search" type="search" placeholder="筛选标记点 / 搜道具、NPC…">' +
+        '<button class="chip map-done-toggle" type="button" aria-pressed="false">隐藏已完成</button>' +
       "</div>" +
       '<div class="map-hits" hidden></div>' +
       '<div class="map-canvas"></div>' +
@@ -589,6 +649,8 @@
         var pts = (m[t] || []).filter(function (p) {
           // 任务接取点默认只显示本章解锁的（避免每张图都堆满几章后的任务）
           if (t === "quest" && !state.questAll && p.c && p.c !== state.chap) return false;
+          // 「隐藏已完成」：把打过勾的宝箱 / 任务点滤掉
+          if (state.hideDone && TYPE_META[t].done && isDone(m.id, t, p)) return false;
           if (!key) return true;
           var hay = ((p.t || "") + " " + (p.n || "") + " " + (p.type || "")).toLowerCase();
           return hay.indexOf(key) > -1;
@@ -642,21 +704,32 @@
       drawMarkers();
     });
     var iconCache = {};
-    function layerIcon(meta) {
-      var k = meta.label;
+    function layerIcon(meta, done) {
+      var k = meta.label + (done ? "|done" : "");
       if (!iconCache[k]) iconCache[k] = window.L.divIcon({
-        className: "x2map-marker" + (meta.dot ? " dot" : ""),
-        html: '<span' + (meta.square ? ' class="sq"' : "") + ' style="background:' + meta.color + '">' + (meta.glyph || "") + "</span>",
+        className: "x2map-marker" + (meta.dot ? " dot" : "") + (done ? " is-done" : ""),
+        html: '<span' + (meta.square ? ' class="sq"' : "") + ' style="' + (done ? "" : "background:" + meta.color) + '">' + (meta.glyph || "") + "</span>",
         iconSize: [18, 18], iconAnchor: [9, 9],
       });
       return iconCache[k];
     }
 
     function makeMarker(pt, meta, icon) {
-      var mk = window.L.marker(markerLatLng(MAPS[state.id] || {}, pt), { icon: icon, title: pt.t || "", riseOnHover: true, x2pt: pt, x2meta: meta });
+      var mapId = state.id;
+      var done = meta.done && isDone(mapId, meta.key, pt);
+      var mk = window.L.marker(markerLatLng(MAPS[state.id] || {}, pt), {
+        icon: done ? layerIcon(meta, true) : icon, title: pt.t || "", riseOnHover: true,
+        x2pt: pt, x2meta: meta, className: done ? "x2-is-done" : "",
+      });
       // 用函数形式的 content：内容在悬停/点击时才生成，几百个点也能秒开
       mk.bindTooltip(function (l) { return markerTip(l.options.x2pt, l.options.x2meta); }, { direction: "top", offset: [0, -8] });
       mk.bindPopup(function (l) { return popupHtml(l.options.x2pt, l.options.x2meta); });
+      mk.on("popupopen", function (e) {
+        // 把点与标记挂到按钮上，供「标记为已完成」使用
+        var el = e.popup && e.popup.getElement && e.popup.getElement();
+        if (!el) return;
+        el.querySelectorAll("[data-done]").forEach(function (b) { b._x2pt = pt; b._x2mk = mk; });
+      });
       return mk;
     }
 
@@ -701,6 +774,12 @@
         var label = meta.key === "salvage" ? "具体打捞物品在 wiki 查看 ↗" : "在 wiki 查看 ↗";
         h += '<div class="x2pop-link"><a href="' + esc(wikiUrl(page)) + '" target="_blank" rel="noopener">' + label + "</a></div>";
       }
+      // 可完成的标记（宝箱 / 任务接取点 / 牵绊对话）给一个打勾按钮
+      if (meta.done) {
+        var dn = isDone(state.id, meta.key, pt);
+        h += '<div class="x2pop-done"><button type="button" class="done-btn' + (dn ? " on" : "") +
+          '" data-done="' + esc(meta.key) + '">' + (dn ? "✓ 已完成（点击撤销）" : "标记为已完成") + "</button></div>";
+      }
       return h + "</div>";
     }
 
@@ -708,7 +787,10 @@
     function questPopupHtml(pt) {
       var h = '<div class="x2pop"><b>任务接取点：' + esc(pt.t || "") + "</b>";
       if (pt.n) h += "<div>委托人：" + esc(pt.n) + "</div>";
+      var dn = isDone(state.id, "quest", pt);
       h += '<div class="x2pop-link"><button type="button" class="qlink" data-quest="' + esc(pt.t || "") + '">查看任务详情</button></div>';
+      h += '<div class="x2pop-done"><button type="button" class="done-btn' + (dn ? " on" : "") +
+        '" data-done="quest">' + (dn ? "✓ 已完成（点击撤销）" : "标记为已完成") + "</button></div>";
       return h + "</div>";
     }
 
@@ -779,6 +861,29 @@
       state.key = search.value;
       drawMarkers();
       renderHits();
+    });
+
+    /* 「隐藏已完成」开关 */
+    var doneToggle = box.querySelector(".map-done-toggle");
+    doneToggle.addEventListener("click", function () {
+      state.hideDone = !state.hideDone;
+      doneToggle.classList.toggle("on", state.hideDone);
+      doneToggle.setAttribute("aria-pressed", String(state.hideDone));
+      doneToggle.textContent = state.hideDone ? "显示已完成" : "隐藏已完成";
+      drawMarkers();
+    });
+
+    /* 弹窗里的「标记为已完成」按钮：通过 popup 上的 _x2pt / _x2mk 找到对应标记 */
+    box.addEventListener("click", function (e) {
+      var b = e.target.closest("[data-done]");
+      if (!b) return;
+      var layer = b.getAttribute("data-done");
+      var pt = b._x2pt, mk = b._x2mk;
+      if (!pt) return;
+      setDone(state.id, layer, pt, !isDone(state.id, layer, pt));
+      drawMarkers();
+      var np = (MAPS[state.id][layer] || []).filter(function (p) { return p.x === pt.x && p.z === pt.z; })[0];
+      if (np && np._mk) np._mk.openPopup();
     });
 
     /* 深链跳转：切到指定地图、打开指定图层，找到匹配的标记点并聚焦 + 弹出气泡。
@@ -1096,5 +1201,7 @@
     chapterAreas: chapterAreas, chapterMapInfo: chapterMapInfo, chapterQuests: chapterQuests,
     focusMapTarget: focusMapTarget, locateTargets: locateTargets, focusIndex: focusIndex,
     openPicker: openPicker, locatableHere: locatableHere, locatableAnywhere: locatableAnywhere,
+    exportDone: exportDone, importDone: importDone, replaceDone: replaceDone, setDone: setDone, isDone: isDone,
+    isQuestDone: isQuestDone, setQuestDone: setQuestDone,
   };
 })();
