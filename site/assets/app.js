@@ -25,6 +25,29 @@
   function $(sel, root) { return (root || document).querySelector(sel); }
   function $$(sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); }
 
+  /* wiki 上确实存在的页面集合（由 tools/fetch_wiki_targets.cjs 核验生成）。
+     集合里存的是**带命名空间前缀**的标题（如「异刃:KOS-MOS Re:」），
+     所以按命名空间补全后再查：异刃→异刃:、敌人→敌人:、道具→物品:、其余为裸标题。
+     目标不在集合里就不生成外链——否则点了只会看到「此页面目前没有内容」。 */
+  var WIKI_EXISTS = null;
+  var NS_OF = { blade: "异刃:", enemy: "敌人:", item: "物品:", term: "" };
+  function wikiExists(title, kind) {
+    if (!window.X2 || !window.X2.wikiExists) return true;   // 没有白名单数据时不过滤（向后兼容）
+    if (!WIKI_EXISTS) {
+      WIKI_EXISTS = {};
+      window.X2.wikiExists.forEach(function (t) { WIKI_EXISTS[t] = 1; });
+    }
+    var t = String(title).replace(/_/g, " ");
+    if (WIKI_EXISTS[t]) return true;
+    var prefix = NS_OF[kind || "term"];
+    return !!(prefix && WIKI_EXISTS[prefix + t]);
+  }
+  /* 生成 wiki 外链；目标不存在时退化为纯文本 */
+  function wikiLink(target, show, kind) {
+    if (!wikiExists(target, kind)) return esc(show);
+    return '<a class="qlink ' + (kind || "term") + '" href="' + esc(wikiUrl(target)) + '" target="_blank" rel="noopener">' + esc(show) + "</a>";
+  }
+
   /* 把文本里的专有名词替换成可点击的 chip：
      - 支线任务名 -> 打开浮窗（quest）
      - 异刃 / 物品 / 敌人 / 关键词 -> 新窗口跳到 wiki
@@ -62,13 +85,17 @@
       if ((ns === "敌人" || ns === "珍稀种") && canLocate(show)) return stash(mapLinkHTML(show));
       if (ns === "地标" || ns === "物品" || ns === "饰品" || ns === "辅助核心") {
         var kind = ns === "地标" ? "term" : "item";
-        var wiki = '<a class="qlink ' + kind + '" href="' + esc(wikiUrl(target)) + '" target="_blank" rel="noopener">' + esc(show) + "</a>";
         // 能在互动地图上定位的，名字本身做成跳地图的按钮，另附一个 wiki 外链
-        if (canLocate(show)) return stash(mapLinkHTML(show) + '<a class="qlink wiki-mini" href="' + esc(wikiUrl(target)) + '" target="_blank" rel="noopener" title="在 wiki 查看">↗</a>');
-        return stash(wiki);
+        if (canLocate(show)) {
+          var mini = wikiExists(target, kind)
+            ? '<a class="qlink wiki-mini" href="' + esc(wikiUrl(target)) + '" target="_blank" rel="noopener" title="在 wiki 查看">↗</a>'
+            : "";
+          return stash(mapLinkHTML(show) + mini);
+        }
+        return stash(wikiLink(target, show, kind));
       }
       var k2 = ns === "异刃" ? "blade" : ns === "敌人" || ns === "珍稀种" ? "enemy" : "term";
-      return stash('<a class="qlink ' + k2 + '" href="' + esc(wikiUrl(target)) + '" target="_blank" rel="noopener">' + esc(show) + "</a>");
+      return stash(wikiLink(target, show, k2));
     });
     // 自动识别任务名（「」内优先）
     out = out.replace(/「([^」]{2,24})」/g, function (m, name) {
@@ -124,6 +151,7 @@
 
   /* ---------------------------------------------------------------- 浮窗 */
   var modal = $("#modal"), modalBody = $("#modalBody"), lastFocus = null;
+  var modalDirty = false;   // 浮窗里改过完成状态，关闭时需要重绘页面
 
   /* 轻提示（如「地图上找不到该位置」） */
   var toastTimer = null;
@@ -149,10 +177,14 @@
   }
   function closeModal() {
     if (modal.hidden) return;
+    var dirty = modalDirty;
+    modalDirty = false;
     modal.hidden = true;
     document.body.style.overflow = "";
     modalBody.innerHTML = "";
     if (lastFocus && lastFocus.focus) lastFocus.focus();
+    // 浮窗里改过完成状态：关掉后重绘章节页，让「本章可接支线」的圆点同步
+    if (dirty) { try { render(); } catch (e) {} }
   }
   document.addEventListener("click", function (e) {
     if (e.target.closest("[data-close]")) { closeModal(); return; }
@@ -262,7 +294,11 @@
         return '<div class="note diff"><span class="note-h">' + esc(d.src || "差异") + "</span>" + renderLinks(d.text) + "</div>";
       }).join("") + "</div>");
     }
-    h.push('<div class="modal-foot"><a class="btn" href="' + esc(q.url || WIKI) + '" target="_blank" rel="noopener">在 wiki 查看原页 ↗</a>' +
+    var qDone = !!(window.X2Map && window.X2Map.isQuestDone && window.X2Map.isQuestDone(q.name));
+    h.push('<div class="modal-foot">' +
+      '<button type="button" class="btn qdone-modal' + (qDone ? " done" : "") + '" data-quest-done="' + esc(q.name) + '">' +
+        (qDone ? "✓ 已完成（点击撤销）" : "标记为已完成") + "</button>" +
+      '<a class="btn" href="' + esc(q.url || WIKI) + '" target="_blank" rel="noopener">在 wiki 查看原页 ↗</a>' +
       '<a class="btn" href="#/quests?q=' + encodeURIComponent(q.name) + '" data-close>在任务库中查看</a></div>');
     return h.join("");
   }
@@ -592,13 +628,19 @@
     }
     h.push('<div class="dexgrid" id="dexgrid">' + items.map(function (it) {
       var href = it.url || wikiUrl(it.name);
-      var ring = cur === "blade" ? '<a class="dex-ring" href="' + esc(wikiUrl(it.name + "/牵绊圆环")) +
-        '" target="_blank" rel="noopener" title="在 wiki 查看牵绊圆环" data-name="' + esc(it.name) + '">圆环↗</a>' : "";
-      return '<span class="dex-wrap">' +
-        '<a class="dex" href="' + esc(href) + '" target="_blank" rel="noopener" data-name="' + esc(it.name) + '">' +
-        '<span class="dex-ico">' + esc(it.icon || it.name.slice(0, 1)) + "</span>" +
-        '<span><span class="dex-nm">' + esc(it.name) + '</span><span class="dex-meta">' + esc(it.meta || "") + "</span></span></a>" +
-        ring + "</span>";
+      var ck = cur === "blade" ? "blade" : (cur === "unique" ? "enemy" : (cur === "auxcore" || cur === "accessory" || cur === "pouch" ? "item" : "term"));
+      // 按名称核验（it.url 只是同一目标的另一种写法，不能作为「存在」的依据）
+      var exists = wikiExists(it.name, ck);
+      // 圆环子页也要单独核验，避免点进去是空页面
+      var ring = cur === "blade" && wikiExists(it.name + "/牵绊圆环", "blade")
+        ? '<a class="dex-ring" href="' + esc(wikiUrl(it.name + "/牵绊圆环")) +
+          '" target="_blank" rel="noopener" title="在 wiki 查看牵绊圆环" data-name="' + esc(it.name) + '">圆环↗</a>' : "";
+      var inner = '<span class="dex-ico">' + esc(it.icon || it.name.slice(0, 1)) + "</span>" +
+        '<span><span class="dex-nm">' + esc(it.name) + '</span><span class="dex-meta">' + esc(it.meta || "") + "</span></span>";
+      var card = exists
+        ? '<a class="dex" href="' + esc(href) + '" target="_blank" rel="noopener" data-name="' + esc(it.name) + '">' + inner + "</a>"
+        : '<span class="dex dex-plain" data-name="' + esc(it.name) + '">' + inner + "</span>";   // wiki 无此页：不可点
+      return '<span class="dex-wrap">' + card + ring + "</span>";
     }).join("") + "</div></div>");
     return h.join("");
   }
@@ -794,12 +836,19 @@
       var qn = qd.getAttribute("data-quest-done");
       var M = window.X2Map;
       if (M && M.setQuestDone) {
-        var on = !M.isQuestDone(qn);
-        M.setQuestDone(qn, on);
-        render();
-        // 地图上的任务接取点共用同一状态，刷新一下
+        M.setQuestDone(qn, !M.isQuestDone(qn));
+        modalDirty = true;
+        // 浮窗开着时原地更新按钮，不闪一下重开
+        if (qd.classList.contains("qdone-modal")) {
+          var on = M.isQuestDone(qn);
+          qd.classList.toggle("done", on);
+          qd.textContent = on ? "✓ 已完成（点击撤销）" : "标记为已完成";
+        } else {
+          render();
+        }
+        // 地图上的任务接取点共用同一状态
         var card = document.querySelector(".mapcard");
-        if (card && card._showMap) { try { card._showMap(); } catch (err) {} }
+        if (card && card._redoMarkers) { try { card._redoMarkers(); } catch (err) {} }
       }
       return;
     }

@@ -364,6 +364,7 @@ figcaption{font-size:12.4px;color:var(--fg-mute);margin-top:5px}
 .kv{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:13.8px;margin:0 0 4px}
 .kv dt{color:var(--fg-mute)}
 .kv dd{margin:0}
+.qdone-modal.done{background:color-mix(in srgb,var(--ok) 22%,transparent);border-color:var(--ok);color:var(--ok)}
 .modal-foot{margin-top:18px;display:flex;gap:8px;flex-wrap:wrap}
 
 /* ---------- 搜索 ---------- */
@@ -662,6 +663,8 @@ html:not([data-theme="light"]) .qflow .chip.qblade{color:#e2ccff}
 /* 稀有异刃条目：主卡 + 右下角的「圆环↗」外链，牵绊圆环内容不在此页重复承载 */
 .dex-wrap{position:relative;display:block}
 .dex-wrap .dex{display:flex}
+.dex.dex-plain{cursor:default;opacity:.55}
+.dex.dex-plain:hover{border-color:var(--line);background:var(--card)}
 .dex-ring{position:absolute;right:8px;bottom:6px;font-size:10.6px;color:var(--accent);
   background:var(--card-2);border:1px solid var(--line);border-radius:6px;padding:1px 6px;white-space:nowrap}
 .dex-ring:hover{border-color:var(--accent)}

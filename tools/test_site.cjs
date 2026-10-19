@@ -19,7 +19,7 @@ function ok(name, cond, extra) {
 }
 
 // 注入数据与脚本（顺序与 index.html 一致）
-const jsFiles = ["data/index.js", "data/quests.js", "data/questflows.js", "data/chapters.js", "data/systems.js", "data/codex.js", "data/extras.js", "data/mag.js", "data/maps.js", "assets/map.js", "assets/app.js"];
+const jsFiles = ["data/index.js", "data/wiki_targets.js", "data/quests.js", "data/questflows.js", "data/chapters.js", "data/systems.js", "data/codex.js", "data/extras.js", "data/mag.js", "data/maps.js", "assets/map.js", "assets/app.js"];
 for (const f of jsFiles) {
   const code = fs.readFileSync(path.join(SITE, f), "utf8");
   try {
@@ -99,6 +99,34 @@ window.dispatchEvent(new window.Event("hashchange"));
 ok("图鉴异刃列表渲染", view.querySelectorAll(".dex").length > 50, view.querySelectorAll(".dex").length + " 项");
 const bladeLinks = Array.from(view.querySelectorAll(".dex")).slice(0, 5).map((a) => a.getAttribute("href"));
 ok("图鉴条目外链 wiki", bladeLinks.every((u) => u && u.indexOf("xenoblade2.cn") > -1), bladeLinks.join(" "));
+// 所有指向 wiki 的内部生成链接，目标都必须在核验过的白名单里（否则点开是空页面）
+ok("wiki 外链目标都已核验存在", (function () {
+  var exists = window.X2.wikiExists || [];
+  if (!exists.length) return true;                 // 未生成白名单时不拦
+  var set = {};
+  exists.forEach(function (t) { set[t] = 1; });
+  var decode = function (href) {
+    return decodeURIComponent(href.replace(/^https?:\/\/xenoblade2\.cn\//, "")).replace(/_/g, " ");
+  };
+  // 与运行时一致：白名单存带命名空间的标题，裸名按「异刃: / 敌人: / 物品:」补全后比对
+  var okTitle = function (t) {
+    if (set[t]) return true;
+    return !!(set["异刃:" + t] || set["敌人:" + t] || set["物品:" + t]);
+  };
+  var bad = [];
+  ["#/codex?cat=blade", "#/codex?cat=auxcore", "#/story/ch2", "#/systems/battle"].forEach(function (h) {
+    window.location.hash = h;
+    window.dispatchEvent(new window.Event("hashchange"));
+    Array.prototype.forEach.call(view.querySelectorAll('a[href*="xenoblade2.cn"]'), function (a) {
+      var t = decode(a.getAttribute("href"));
+      if (t && !okTitle(t)) bad.push(t);
+    });
+  });
+  window.location.hash = "#/codex?cat=blade";
+  window.dispatchEvent(new window.Event("hashchange"));
+  if (bad.length) console.log("    DEAD:", [...new Set(bad)].slice(0, 12).join(" | "));   // 失败时列出前几条便于排查
+  return bad.length === 0;
+})());
 // 图鉴分类切换：#/codex?cat=xxx 必须真的生效（路由曾把 parts 当 params 传进来）
 window.location.hash = "#/codex?cat=auxcore";
 window.dispatchEvent(new window.Event("hashchange"));

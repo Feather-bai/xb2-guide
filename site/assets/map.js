@@ -347,6 +347,23 @@
     });
   }
 
+  /* ---------------- 每章地图视图状态的记忆 ----------------
+     悬浮地图每次打开都会重新渲染整张卡片。为了「收起再打开还是刚才那
+     张图、那些图层开关」，把状态按章节存到 localStorage（键 x2.map.view.<章节id>），
+     换章节就各自一份。 */
+  var VIEW_KEY = "x2.map.view.";
+  function loadView(chapId) {
+    try { return JSON.parse(localStorage.getItem(VIEW_KEY + chapId) || "null") || null; } catch (e) { return null; }
+  }
+  function saveView(chapId, st) {
+    if (!chapId || !st) return;
+    try {
+      localStorage.setItem(VIEW_KEY + chapId, JSON.stringify({
+        id: st.id, types: st.types, questAll: st.questAll, hideDone: st.hideDone,
+      }));
+    } catch (e) {}
+  }
+
   /**
    * 渲染一个章节的地图卡片
    * @param {object} chapter 章节对象
@@ -371,6 +388,19 @@
     // chap: 当前章节 id；questAll: 任务接取点是只看本章解锁的，还是全看；
     // questMaps: 只因「本章可接支线」才带入的地图（标签标黄，与主线区分）
     var state = { id: firstId, types: defaultTypes(), key: "", chap: chapter.id, questAll: false, questMaps: mi.questMaps, hideDone: false };
+    // 恢复本章上次的视图（上次停在哪张图、哪些图层开着）；换章节各记各的
+    var savedView = loadView(chapter.id);
+    if (savedView) {
+      if (savedView.id && MAPS[savedView.id] && mapIds.indexOf(savedView.id) > -1) state.id = savedView.id;
+      if (savedView.types) {
+        LAYER_KEYS.forEach(function (k) {
+          if (typeof savedView.types[k] === "boolean") state.types[k] = savedView.types[k];
+        });
+      }
+      if (typeof savedView.questAll === "boolean") state.questAll = savedView.questAll;
+      if (typeof savedView.hideDone === "boolean") state.hideDone = savedView.hideDone;
+    }
+    function remember() { saveView(chapter.id, state); }
 
     box.innerHTML =
       '<div class="mapcard-head">' +
@@ -425,6 +455,7 @@
           var ids = areaMaps(a);
           if (!ids.length) return;
           state.id = ids[0];
+          remember();
           renderAreas(); renderMaps(); showMap();
         });
         areaBox.appendChild(b);
@@ -475,7 +506,7 @@
         b.type = "button";
         b.title = m.area + " · " + m.id + "（" + m.w + "×" + m.h + "）" +
           (side === " side" ? " · 本章支线所在地图" : "");
-        b.addEventListener("click", function () { state.id = id; renderMaps(); showMap(); });
+        b.addEventListener("click", function () { state.id = id; remember(); renderMaps(); showMap(); });
         mapBox.appendChild(b);
       });
     }
@@ -493,6 +524,7 @@
         b.addEventListener("click", function () {
           if (!cnt) return;
           state.types[t] = !state.types[t];
+          remember();
           renderTypes(); showMap();
         });
         typeBox.appendChild(b);
@@ -701,6 +733,7 @@
       var b = e.target.closest("[data-qall]");
       if (!b) return;
       state.questAll = b.getAttribute("data-qall") === "1";
+      remember();
       drawMarkers();
     });
     var iconCache = {};
@@ -865,8 +898,15 @@
 
     /* 「隐藏已完成」开关 */
     var doneToggle = box.querySelector(".map-done-toggle");
+    // 恢复上次的「隐藏已完成」状态
+    if (state.hideDone) {
+      doneToggle.classList.add("on");
+      doneToggle.setAttribute("aria-pressed", "true");
+      doneToggle.textContent = "显示已完成";
+    }
     doneToggle.addEventListener("click", function () {
       state.hideDone = !state.hideDone;
+      remember();
       doneToggle.classList.toggle("on", state.hideDone);
       doneToggle.setAttribute("aria-pressed", String(state.hideDone));
       doneToggle.textContent = state.hideDone ? "显示已完成" : "隐藏已完成";
@@ -891,6 +931,7 @@
     function selectMap(mapId) {
       state.id = mapId;
       state.noCluster = false;   // 切图恢复聚合（深链定位时会临时关掉）
+      remember();                // 深链跳到的图也记成本章「上次看的图」
       renderAreas(); renderMaps(); renderTypes();
       showMap();
     }
@@ -975,6 +1016,8 @@
     box._focusMarker = focusMarker;
     box._chapterId = chapter.id;
     box._showMap = showMap;
+    // 外部改了完成状态后只需重画标记，不必重建整张卡片
+    box._redoMarkers = function () { try { drawMarkers(); } catch (e) {} };
     renderAreas();
     renderMaps();
     // 初始地图：章节地点列表里的区域优先（越靠前权重越高），其次按标记点数量
@@ -991,7 +1034,8 @@
       if (state.questMaps[id]) score -= 300000;   // 优先选主线地图，支线带入的地图只作补充
       if (!best || score > best.score) best = { id: id, score: score, n: n, area: mm.area, group: mm.group };
     });
-    if (best) state.id = best.id;
+    // 只有当本章没有保存过「上次看哪张图」时，才用启发式挑默认地图
+    if (best && !(savedView && savedView.id)) state.id = best.id;
     // 首选区域排到最前，方便切换
     if (best && best.area && areas.indexOf(best.area) > 0) {
       areas.splice(areas.indexOf(best.area), 1);
