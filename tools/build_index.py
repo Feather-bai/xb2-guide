@@ -20,7 +20,7 @@ modules = [
     {"id": "story", "group": "攻略主体", "title": "主线流程", "desc": "第一至最终章的完整流程，支线可点开浮窗", "icon": "▤", "color": "cc-bg2"},
     {"id": "quests", "group": "攻略主体", "title": "任务库", "desc": "166 条主线 / 普通 / 异刃任务的条件、流程与报酬", "icon": "☰", "color": "cc-bg3"},
     {"id": "systems", "group": "攻略主体", "title": "系统与养成", "desc": "战斗系统、异刃培养、佣兵团、打捞与经济", "icon": "⚔", "color": "cc-bg4"},
-    {"id": "codex", "group": "资料", "title": "图鉴", "desc": "异刃、辅助核心、饰品、地标、珍稀种索引", "icon": "◈", "color": "cc-bg5"},
+    {"id": "codex", "group": "资料", "title": "图鉴", "desc": "异刃 / 核心晶片 / 饰品 / 辅助核心 / 收纳包 / 收藏道具 / 宝藏 / 贵重品 / 产权证", "icon": "◈", "color": "cc-bg5"},
     {"id": "maps", "group": "资料", "title": "地图与收集", "desc": "各区域地标、宝箱、打捞点与开环怪", "icon": "◎", "color": "cc-bg6"},
     {"id": "mag", "group": "资料", "title": "原刊对照", "desc": "《攻略特辑》上下册 68 页原图与文字", "icon": "▦", "color": "cc-bg7"},
     {"id": "compare", "group": "资料", "title": "攻略差异对照", "desc": "四份材料说法不同的地方集中对照", "icon": "⇄", "color": "cc-bg8"},

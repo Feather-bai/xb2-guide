@@ -1,11 +1,11 @@
 // 极简静态服务器（本地预览用，Node 版，替代 tools/serve.py）。
-// 用法：node tools/serve.cjs [port]
+// 用法：node tools/serve.cjs [port]；未给参数时读 PORT 环境变量（launch.json 的 autoPort 会改它），默认 8902。
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
 
 const ROOT = path.join(__dirname, "..", "site");
-const PORT = Number(process.argv[2]) || 8899;
+const PORT = Number(process.argv[2] || process.env.PORT) || 8902;
 
 const MIME = {
   ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",

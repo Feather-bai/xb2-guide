@@ -180,10 +180,22 @@
     saveDone();
     return on;
   }
+  /* 通用标记：按完整键写入（图鉴「已收集」等不依附地图坐标的状态） */
+  function isFlag(key) { return !!loadDone()[key]; }
+  function setFlag(key, on) {
+    var d = loadDone();
+    if (on) d[key] = 1; else delete d[key];
+    saveDone();
+    return on;
+  }
   /* 供同步模块读写整份完成状态 */
   function exportDone() { return JSON.parse(JSON.stringify(loadDone())); }
   function importDone(obj) {
     if (!obj || typeof obj !== "object") return;
+    // 兼容早期版本写入的脏键（codex:<分类>|codex|0|0），直接忽略
+    Object.keys(obj).forEach(function (k) {
+      if (k.indexOf("codex:") === 0 && k.indexOf("|codex|") > -1) delete obj[k];
+    });
     doneSet = Object.assign({}, doneSet || {}, obj);
     saveDone();
   }
@@ -1239,13 +1251,35 @@
     return true;
   }
 
+  /** 在**侧边（dock）地图**里定位某个 NPC / 敌人：不切章节，直接让侧边地图切到含该点的章节再定位。
+      图鉴等非章节页的弹窗用这个——地图就在右侧展开，不需要离开当前页面。 */
+  function focusInDock(kind, name, hint) {
+    var targets = locateTargets(kind, name);
+    if (!targets.length) return null;
+    var t = targets.filter(function (x) { return x.sameChap; })[0] || targets[0];
+    var label = hint || (kind === "enemy" ? "敌人：" + name : "NPC：" + name);
+    var tries = 0;
+    (function attempt() {
+      var card = document.getElementById("mapcard-" + t.c);
+      if (card && card._focusMarker && card.closest("#mapDock")) {
+        card._focusMarker(t.m, t.k, matcherFor(t.k, name, t.key), label);
+        try { card.scrollIntoView({ block: "nearest", behavior: "smooth" }); } catch (e) {}
+        return;
+      }
+      // 侧边地图还没打开、或当前显示的不是这张地图：让它切到目标章节
+      if (window.X2App && window.X2App.openDock) window.X2App.openDock(t.c);
+      if (++tries < 30) setTimeout(attempt, 80);
+    })();
+    return t;
+  }
+
   window.X2Map = {
     renderChapterMap: renderChapterMap, mountChapters: mountChapters, detectAreas: detectAreas,
     MAPS: MAPS, markerLatLng: markerLatLng, chapterMaps: chapterMaps,
     chapterAreas: chapterAreas, chapterMapInfo: chapterMapInfo, chapterQuests: chapterQuests,
-    focusMapTarget: focusMapTarget, locateTargets: locateTargets, focusIndex: focusIndex,
+    focusMapTarget: focusMapTarget, locateTargets: locateTargets, focusIndex: focusIndex, focusInDock: focusInDock,
     openPicker: openPicker, locatableHere: locatableHere, locatableAnywhere: locatableAnywhere,
     exportDone: exportDone, importDone: importDone, replaceDone: replaceDone, setDone: setDone, isDone: isDone,
-    isQuestDone: isQuestDone, setQuestDone: setQuestDone,
+    isQuestDone: isQuestDone, setQuestDone: setQuestDone, isFlag: isFlag, setFlag: setFlag,
   };
 })();

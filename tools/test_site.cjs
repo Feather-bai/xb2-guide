@@ -19,7 +19,7 @@ function ok(name, cond, extra) {
 }
 
 // 注入数据与脚本（顺序与 index.html 一致）
-const jsFiles = ["data/index.js", "data/wiki_targets.js", "data/quests.js", "data/questflows.js", "data/chapters.js", "data/systems.js", "data/codex.js", "data/extras.js", "data/mag.js", "data/maps.js", "assets/map.js", "assets/app.js"];
+const jsFiles = ["data/index.js", "data/wiki_targets.js", "data/wiki_titles_all.js", "data/quests.js", "data/questflows.js", "data/chapters.js", "data/systems.js", "data/codex.js", "data/codex_v2.js", "data/extras.js", "data/mag.js", "data/maps.js", "assets/map.js", "assets/app.js"];
 for (const f of jsFiles) {
   const code = fs.readFileSync(path.join(SITE, f), "utf8");
   try {
@@ -128,22 +128,211 @@ ok("wiki 外链目标都已核验存在", (function () {
   return bad.length === 0;
 })());
 // 图鉴分类切换：#/codex?cat=xxx 必须真的生效（路由曾把 parts 当 params 传进来）
-window.location.hash = "#/codex?cat=auxcore";
-window.dispatchEvent(new window.Event("hashchange"));
-const auxDex = view.querySelectorAll(".dex").length;
-const auxActive = (view.querySelector("[data-codex].blue") || {}).getAttribute
-  ? view.querySelector("[data-codex].blue").getAttribute("data-codex") : "";
-ok("图鉴可切到辅助核心", auxDex === 35 && auxActive === "auxcore", auxDex + " 项 / 当前 " + auxActive);
-window.location.hash = "#/codex?cat=accessory";
-window.dispatchEvent(new window.Event("hashchange"));
-ok("图鉴可切到饰品", view.querySelectorAll(".dex").length === 33, view.querySelectorAll(".dex").length + " 项");
-// 稀有异刃页不应重复承载牵绊圆环内容（改为外链引导）
+// 新图鉴按 APK 的游戏内分页分类：异刃 55，其余按 item_type
+ok("图鉴：九个分类标签", (function () {
+  var labels = Array.from(view.querySelectorAll("[data-codex]")).map(function (b) { return b.getAttribute("data-codex"); });
+  return labels.length === 9;
+})());
+// 点击分类标签（真实点击路径）：所有中文分类都要能进去。
+// 曾因 data-codex 先编码一次、点击时又编码一次导致只有「异刃」能进。
+ok("点击每个分类标签都能切过去", (function () {
+  var tabs = Array.from(view.querySelectorAll("[data-codex]"));
+  var bad = [];
+  tabs.forEach(function (b) {
+    b.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+    var want = decodeURIComponent(b.getAttribute("data-codex").replace(/^blade$/, "异刃"));
+    var raw = new URLSearchParams(window.location.hash.split("?")[1] || "").get("cat") || "异刃";
+    var cat = raw === "blade" ? "异刃" : raw;   // 与 codexCatFromParam 的别名映射一致
+    if (cat !== want) bad.push(b.textContent.trim() + " → " + raw);
+  });
+  return bad.length === 0;
+})(), (function () {
+  return Array.from(view.querySelectorAll("[data-codex]")).map(function (b) { return b.getAttribute("data-codex"); }).join(",");
+})());
 window.location.hash = "#/codex?cat=blade";
 window.dispatchEvent(new window.Event("hashchange"));
-const ringEntries = Array.from(view.querySelectorAll("#dexgrid .dex-nm")).filter((n) => /牵绊圆环/.test(n.textContent));
-ok("稀有异刃页不含牵绊圆环条目", ringEntries.length === 0, ringEntries.length + " 条");
-ok("稀有异刃条目提供圆环外链引导", view.querySelectorAll("#dexgrid .dex-ring").length > 40);
-ok("稀有异刃页有圆环说明", !!view.querySelector(".codex-note"));
+(function () {
+  var st = window.__codexState;
+  if (st) { st.filters["异刃"] = {}; st.key["异刃"] = ""; st.mood["异刃"] = "all"; }
+  window.location.hash = "#/codex?cat=blade";
+  window.dispatchEvent(new window.Event("hashchange"));
+})();
+ok("图鉴异刃只有 55 条（含非异刃条目已被剔除）", view.querySelectorAll("#codexList .dex").length === 55,
+   view.querySelectorAll("#codexList .dex").length + " 条");
+ok("异刃按 APP 原始顺序（焰在最前）", view.querySelector("#codexList .dex-nm").textContent === "焰",
+   view.querySelector("#codexList .dex-nm").textContent);
+ok("异刃页没有「/」子页条目（火花/料理 之类）", !/[^\s]\/[^\s]/.test(
+   Array.from(view.querySelectorAll("#codexList .dex-nm")).map(function (n) { return n.textContent; }).join(" ")));
+ok("异刃按属性分栏（火在最前）", (function () {
+  var groups = Array.from(view.querySelectorAll("#codexList .dex-region")).map(function (n) { return n.textContent.replace(/\s*\d+\s*$/, ""); });
+  return groups.length === 8 && groups[0] === "火";
+})(), Array.from(view.querySelectorAll("#codexList .dex-region")).map(function (n) { return n.textContent; }).join("、"));
+ok("异刃页筛选用下拉框（属性 / 类型 / 场景技能），没有输入框", (function () {
+  var sels = Array.from(view.querySelectorAll("select[data-facet]")).map(function (s) { return s.getAttribute("data-facet"); });
+  return sels.length === 3 && sels.indexOf("element") > -1 && sels.indexOf("role") > -1 && sels.indexOf("fs") > -1 &&
+    view.querySelectorAll("[data-facetq], .codex-combo").length === 0;
+})(), Array.from(view.querySelectorAll("select[data-facet]")).map(function (s) { return s.getAttribute("data-facet"); }).join(","));
+ok("异刃页没有武器 / 异刃类别筛选", view.querySelectorAll('select[data-facet="weapon"], select[data-facet="kind"]').length === 0);
+ok("异刃页有已收集标记按钮", view.querySelectorAll("[data-codex-got]").length === 55);
+ok("收集筛选是三态（全部/已收集/未收集）", (function () {
+  var moods = Array.from(view.querySelectorAll("[data-cmood]")).map(function (b) { return b.getAttribute("data-cmood"); });
+  return moods.length === 3 && moods.join(",") === "all,got,not";
+})());
+// 按属性下拉：选「火」后只剩火栏
+(function () {
+  var sel = view.querySelector('select[data-facet="element"]');
+  if (!sel) return;
+  sel.value = "火";
+  sel.dispatchEvent(new window.Event("change", { bubbles: true }));
+})();
+ok("按属性（火）筛选生效", view.querySelectorAll("#codexList .dex").length > 0 && view.querySelectorAll("#codexList .dex").length < 55 &&
+   view.querySelectorAll("#codexList .dex-region").length === 1,
+   view.querySelectorAll("#codexList .dex").length + " 条");
+// 场景技能下拉：先清属性，再选「开锁」
+(function () {
+  var el = view.querySelector('select[data-facet="element"]');
+  if (el) { el.value = ""; el.dispatchEvent(new window.Event("change", { bubbles: true })); }
+  var sel = view.querySelector('select[data-facet="fs"]');
+  if (!sel) return;
+  sel.value = "开锁";
+  sel.dispatchEvent(new window.Event("change", { bubbles: true }));
+})();
+ok("按场景技能（开锁）筛选生效", view.querySelectorAll("#codexList .dex").length === 8 &&
+   Array.from(view.querySelectorAll("#codexList .dex-nm")).every(function (n) { return n.textContent !== "焰"; }),
+   view.querySelectorAll("#codexList .dex").length + " 条");
+// 标记收集后，「已收集」三态只显示这一条（先清掉场景技能筛选）
+(function () {
+  var fsSel = view.querySelector('select[data-facet="fs"]');
+  if (fsSel) { fsSel.value = ""; fsSel.dispatchEvent(new window.Event("change", { bubbles: true })); }
+})();
+(function () {
+  var first = view.querySelector("[data-codex-got]");
+  if (first) first.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+})();
+(function () {
+  var gotBtn = Array.from(view.querySelectorAll("[data-cmood]")).filter(function (b) { return b.getAttribute("data-cmood") === "got"; })[0];
+  if (gotBtn) gotBtn.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+})();
+ok("「已收集」筛选只显示标记过的异刃", view.querySelectorAll("#codexList .dex").length === 1,
+   view.querySelectorAll("#codexList .dex").length + " 条");
+ok("已收集计数同步显示", (function () {
+  var n = view.querySelector(".codex-gotn");
+  return !!n && /1/.test(n.textContent) && /55/.test(n.textContent);
+})(), view.querySelector(".codex-gotn") && view.querySelector(".codex-gotn").textContent);
+// 清掉收集筛选，后面的断言按全量看
+(function () {
+  var all = Array.from(view.querySelectorAll("[data-cmood]")).filter(function (b) { return b.getAttribute("data-cmood") === "all"; })[0];
+  if (all) all.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+})();
+window.location.hash = "#/codex?cat=auxcore";
+window.dispatchEvent(new window.Event("hashchange"));
+ok("图鉴可切到辅助核心", view.querySelectorAll("#codexList .dex").length === 415,
+   view.querySelectorAll("#codexList .dex").length + " 项");
+ok("辅助核心按效果分栏", view.querySelectorAll("#codexList .dex-region").length > 10,
+   view.querySelectorAll("#codexList .dex-region").length + " 栏");
+ok("非异刃分类有类型下拉", view.querySelectorAll('select[data-facet="type"]').length === 1);
+ok("非异刃分类没有收集标记", view.querySelectorAll("[data-codex-got], [data-cmood]").length === 0);
+window.location.hash = "#/codex?cat=accessory";
+window.dispatchEvent(new window.Event("hashchange"));
+ok("图鉴可切到饰品", view.querySelectorAll("#codexList .dex").length === 581,
+   view.querySelectorAll("#codexList .dex").length + " 项");
+ok("饰品按效果分栏且可筛稀有度", view.querySelectorAll("#codexList .dex-region").length > 10 &&
+   view.querySelector('select[data-facet="rarity"]') !== null);
+// 核心晶片：按稀有度分栏（普通→稀有→史诗），栏内按等级；只有稀有度筛选
+window.location.hash = "#/codex?cat=" + encodeURIComponent("核心晶片");
+window.dispatchEvent(new window.Event("hashchange"));
+ok("核心晶片按稀有度分栏", (function () {
+  var regs = Array.from(view.querySelectorAll("#codexList .dex-region")).map(function (n) { return n.textContent.replace(/\s*\d+\s*$/, ""); });
+  return regs.join(",") === "普通,稀有,史诗";
+})(), Array.from(view.querySelectorAll("#codexList .dex-region")).map(function (n) { return n.textContent; }).join("、"));
+ok("核心晶片只有稀有度筛选", view.querySelectorAll("select[data-facet]").length === 1 &&
+   view.querySelector('select[data-facet="rarity"]') !== null);
+ok("核心晶片稀有度筛选生效", (function () {
+  var sel = view.querySelector('select[data-facet="rarity"]');
+  sel.value = "史诗";
+  sel.dispatchEvent(new window.Event("change", { bubbles: true }));
+  var regs = Array.from(view.querySelectorAll("#codexList .dex-region")).map(function (n) { return n.textContent.replace(/\s*\d+\s*$/, ""); });
+  var okk = regs.length === 1 && regs[0] === "史诗" && view.querySelectorAll("#codexList .dex").length === 18;
+  sel.value = "";
+  sel.dispatchEvent(new window.Event("change", { bubbles: true }));
+  return okk;
+})());
+// 宝藏：地区 + 稀有度，没有「宝藏/全部」的类型筛选
+window.location.hash = "#/codex?cat=" + encodeURIComponent("宝藏");
+window.dispatchEvent(new window.Event("hashchange"));
+ok("宝藏页按地区筛选并带稀有度筛选", view.querySelectorAll("select[data-facet]").length === 2 &&
+   view.querySelector('select[data-facet="region"]') !== null && view.querySelector('select[data-facet="rarity"]') !== null);
+ok("宝藏页没有类型筛选", view.querySelector('select[data-facet="type"]') === null);
+ok("宝藏页按地区分栏", view.querySelectorAll("#codexList .dex-region").length > 3,
+   view.querySelectorAll("#codexList .dex-region").length + " 栏");
+ok("宝藏地区按主线先后排序", (function () {
+  var regs = Array.from(view.querySelectorAll("#codexList .dex-region")).map(function (n) { return n.textContent.replace(/\s*\d+\s*$/, ""); });
+  return regs.indexOf("阿伐利缇亚商会") === 0 && regs[1] === "古拉";
+})(), Array.from(view.querySelectorAll("#codexList .dex-region")).map(function (n) { return n.textContent; }).join("、"));
+// 收藏道具：类型 + 地区 + 稀有度三个筛选
+window.location.hash = "#/codex?cat=" + encodeURIComponent("收藏道具");
+window.dispatchEvent(new window.Event("hashchange"));
+ok("收藏道具按类型/地区/稀有度筛选", view.querySelectorAll("select[data-facet]").length === 3 &&
+   view.querySelector('select[data-facet="type"]') !== null && view.querySelector('select[data-facet="region"]') !== null &&
+   view.querySelector('select[data-facet="rarity"]') !== null);
+ok("收藏道具按类型分栏", view.querySelectorAll("#codexList .dex-region").length === 8,
+   view.querySelectorAll("#codexList .dex-region").length + " 栏");
+// 收纳包道具 / 贵重品：按类型分栏
+window.location.hash = "#/codex?cat=" + encodeURIComponent("收纳包道具");
+window.dispatchEvent(new window.Event("hashchange"));
+ok("收纳包道具按类型分栏", view.querySelectorAll("#codexList .dex-region").length === 12,
+   view.querySelectorAll("#codexList .dex-region").length + " 栏");
+window.location.hash = "#/codex?cat=" + encodeURIComponent("贵重品");
+window.dispatchEvent(new window.Event("hashchange"));
+ok("贵重品按类型分栏", view.querySelectorAll("#codexList .dex-region").length >= 5,
+   view.querySelectorAll("#codexList .dex-region").length + " 栏");
+ok("无 wiki 的贵重品可点击弹窗", view.querySelectorAll("#codexList .dex-more").length === 20,
+   view.querySelectorAll("#codexList .dex-more").length + " 个");
+ok("贵重品弹窗展示名称 / 类型 / 获取途径", (function () {
+  var btn = view.querySelector("#codexList .dex-more");
+  if (!btn) return false;
+  var name = btn.textContent.replace(/^.{1}/, "").trim();
+  btn.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  var body = document.getElementById("modalBody").textContent;
+  var shown = document.getElementById("modal").hidden === false &&
+    /类型/.test(body) && /获取途径/.test(body) && body.indexOf(name.slice(0, 4)) > -1;
+  document.getElementById("modalClose").dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  return shown;
+})());
+window.location.hash = "#/codex?cat=" + encodeURIComponent("产权证");
+window.dispatchEvent(new window.Event("hashchange"));
+ok("图鉴可切到产权证", view.querySelectorAll(".dexgrid .dex").length > 0 && view.querySelectorAll(".dex-region").length > 0,
+   view.querySelectorAll(".dexgrid .dex").length + " 项 / " + view.querySelectorAll(".dex-region").length + " 栏");
+ok("产权证按地区筛选", view.querySelector('select[data-facet="region"]') !== null);
+ok("非异刃分类也有搜索框", !!document.querySelector("#codexSearch"));
+// 搜索框：只局部刷新列表、不替换输入框节点（手机上输入法不被打断）
+ok("图鉴搜索时输入框不被替换（输入法不被打断）", (function () {
+  window.location.hash = "#/codex?cat=blade";
+  window.dispatchEvent(new window.Event("hashchange"));
+  var st = window.__codexState;
+  if (st) { st.filters["异刃"] = {}; st.key["异刃"] = ""; st.mood["异刃"] = "all"; }
+  window.location.hash = "#/codex?cat=blade";
+  window.dispatchEvent(new window.Event("hashchange"));
+  var inp = document.querySelector("#codexSearch");
+  inp.focus();
+  inp.value = "花";
+  inp.dispatchEvent(new window.Event("input", { bubbles: true }));
+  var same = document.querySelector("#codexSearch") === inp;
+  var focused = window.document.activeElement === inp;
+  inp.value = "";
+  inp.dispatchEvent(new window.Event("input", { bubbles: true }));
+  return same && focused;
+})());
+// 所有分类卡片等高
+ok("图鉴卡片高度一致（不留空位）", (function () {
+  window.location.hash = "#/codex?cat=" + encodeURIComponent("收藏道具");
+  window.dispatchEvent(new window.Event("hashchange"));
+  var hs = Array.from(document.querySelectorAll("#codexList .dex")).map(function (c) { return Math.round(c.getBoundingClientRect().height); });
+  var set = hs.filter(function (v, i) { return hs.indexOf(v) === i; });
+  return hs.length > 0 && set.length <= 1;
+})());
+window.location.hash = "#/codex?cat=blade";
+window.dispatchEvent(new window.Event("hashchange"));
 
 // 遍历全部章节：要点等结构化内容不能被渲染成 [object Object]
 let objLeak = 0, keypointTitles = 0, emptyNotes = 0;

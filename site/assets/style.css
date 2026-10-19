@@ -240,19 +240,24 @@ tbody tr:hover{background:color-mix(in srgb,var(--accent) 6%,transparent)}
 .list-item .li-sub{font-size:12.4px;color:var(--fg-mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .list-item .li-go{color:var(--fg-mute);flex:0 0 auto}
 
-/* 图鉴格子 */
-.dexgrid{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(146px,1fr))}
+/* 图鉴格子：所有卡片统一高度，文字一律单行截断，保证每行填满、不留空位 */
+.dexgrid{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));grid-auto-rows:72px}
 .dex{
   background:var(--card);border:1px solid var(--line);border-radius:var(--radius-s);
-  padding:9px 10px;text-align:left;cursor:pointer;display:flex;gap:9px;align-items:center;min-height:56px;
+  padding:9px 10px;text-align:left;cursor:pointer;display:flex;gap:9px;align-items:center;
+  height:72px;box-sizing:border-box;overflow:hidden;
 }
 .dex:hover{border-color:color-mix(in srgb,var(--accent) 50%,transparent)}
 .dex .dex-ico{
   flex:0 0 auto;width:34px;height:34px;border-radius:8px;display:grid;place-items:center;
   background:var(--card-2);font-size:15px;font-weight:700;color:var(--accent);
 }
-.dex .dex-nm{font-size:13.6px;font-weight:600;line-height:1.3}
-.dex .dex-meta{font-size:11.4px;color:var(--fg-mute)}
+.dex .dex-body{flex:1;min-width:0}
+.dex .dex-nm{font-size:13.6px;font-weight:600;line-height:1.3;display:block;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* 元信息两行截断（辅助核心 / 饰品的特效说明较长，不能单行加省略号丢内容） */
+.dex .dex-meta{font-size:11.4px;color:var(--fg-mute);display:-webkit-box;-webkit-line-clamp:2;
+  -webkit-box-orient:vertical;overflow:hidden;line-height:1.35;max-width:100%;word-break:break-all}
 
 /* 折叠块 */
 details.acc{
@@ -660,14 +665,79 @@ html:not([data-theme="light"]) .qflow .chip.qblade{color:#e2ccff}
 @media (max-width:719px){ .sync-panel{left:8px;right:8px;bottom:8px;width:auto} }
 
 .codex-note{margin:0 0 10px;font-size:12px;line-height:1.55;color:var(--fg-mute)}
-/* 稀有异刃条目：主卡 + 右下角的「圆环↗」外链，牵绊圆环内容不在此页重复承载 */
-.dex-wrap{position:relative;display:block}
-.dex-wrap .dex{display:flex}
+/* 异刃条目：主卡 + 右上角收集勾 */
+/* 异刃条目：主卡 + 右上角收集勾。外层与卡片同高，保证每行等高 */
+.dex-wrap{position:relative;display:block;height:72px}
+.dex-wrap .dex{display:flex;height:100%}
+/* 所有卡片等高：名称 + 一行元信息，效果行不显示（信息太多会撑高卡片、让整行留空） */
+.dex .dex-eff{display:none}
+/* ---------- 图鉴 v2：搜索 + 下拉筛选 / 三态收集 ---------- */
+.codex-tools{display:flex;flex-direction:column;gap:9px}
+#codexSearch{width:100%;background:var(--card-2);border:1px solid var(--line);border-radius:9px;
+  padding:9px 12px;color:var(--fg);font-size:15px}
+.codex-sels{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.codex-sel{display:flex;align-items:center;gap:6px;font-size:12.4px;color:var(--fg-mute);min-width:0}
+.codex-sel select{max-width:58vw;background:var(--card-2);border:1px solid var(--line);border-radius:8px;
+  padding:5px 26px 5px 9px;color:var(--fg);font-size:13px;appearance:none;cursor:pointer;
+  background-image:linear-gradient(45deg,transparent 50%,var(--fg-mute) 50%),linear-gradient(135deg,var(--fg-mute) 50%,transparent 50%);
+  background-position:calc(100% - 15px) 50%,calc(100% - 10px) 50%;background-size:5px 5px;background-repeat:no-repeat}
+.codex-sel select:focus{outline:2px solid color-mix(in srgb,var(--accent) 55%,transparent);outline-offset:1px}
+/* 收集三态：一组 chip + 计数 */
+.codex-sels .seg{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+.codex-sels .seg .chip{font-size:11.8px;padding:2px 9px;cursor:pointer}
+.codex-gotn{font-size:11.6px;color:var(--fg-mute);margin-left:6px}
+.codex-gotn b{color:var(--ok);font-weight:700}
+.codex-count{font-size:12px;color:var(--fg-mute);margin:0 0 7px}
+.dex .dex-body{display:flex;flex-direction:column;gap:1px;min-width:0}
+.dex .dex-eff{font-size:11.2px;color:var(--fg-mute);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+/* 已收集：卡片右上角绿色勾 */
+.dex-got{position:absolute;top:5px;right:5px;width:19px;height:19px;border-radius:50%;cursor:pointer;
+  border:1.5px solid var(--line);background:var(--card-2);color:transparent;font-size:11px;line-height:1;padding:0}
+.dex-got:hover{border-color:var(--ok);color:color-mix(in srgb,var(--ok) 60%,transparent)}
+.dex-got.on{background:var(--ok);border-color:var(--ok);color:#04140c;font-weight:800}
+.dex-wrap.got .dex{opacity:.62}
+.dex-wrap.got .dex-nm{text-decoration:line-through}
 .dex.dex-plain{cursor:default;opacity:.55}
 .dex.dex-plain:hover{border-color:var(--line);background:var(--card)}
+/* 没有 wiki 页的条目（贵重品等）：可点，弹窗看 APP 数据；右上角信息角标 */
+.dex.dex-more{width:100%;font:inherit;color:inherit;position:relative}
+.dex.dex-more .dex-more-i{position:absolute;top:4px;right:5px;width:15px;height:15px;border-radius:50%;
+  display:grid;place-items:center;font-size:9.6px;font-weight:700;font-style:normal;
+  background:var(--card-2);border:1px solid var(--line);color:var(--fg-mute)}
+.dex.dex-more:hover .dex-more-i{border-color:var(--accent);color:var(--accent)}
+/* 分栏标题右侧的条目数 */
+.dex-region .dex-gn{font-weight:400;font-size:11px;color:var(--fg-mute)}
 .dex-ring{position:absolute;right:8px;bottom:6px;font-size:10.6px;color:var(--accent);
   background:var(--card-2);border:1px solid var(--line);border-radius:6px;padding:1px 6px;white-space:nowrap}
 .dex-ring:hover{border-color:var(--accent)}
+/* 地区分段标题（收藏道具 / 宝藏 / 产权证）：按主线先后顺序 */
+.dex-region{margin:14px 0 7px;font-size:12.4px;font-weight:700;color:var(--fg-dim);
+  display:flex;align-items:center;gap:8px}
+.dex-region::after{content:"";flex:1;height:1px;background:var(--line)}
+.dex-region:first-child{margin-top:4px}
+/* ---------- 前置筛选框：左边输入联想，右边下拉选全量 ---------- */
+.codex-sels .codex-combo{flex:1 1 100%;min-width:0}
+.codex-combo{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center}
+/* 三个筛选并排：输入框吃掉剩余宽度，下拉只占内容宽 */
+.codex-tools{container-type:inline-size}
+.codex-combo .codex-sel{flex:0 0 auto;min-width:0;display:flex;align-items:center;gap:6px}
+.codex-combo .codex-sel input{width:170px;max-width:100%;background:var(--card-2);border:1px solid var(--line);
+  border-right:0;border-radius:8px 0 0 8px;padding:5px 9px;color:var(--fg);font-size:13px;min-width:0}
+.codex-combo .codex-sel input:focus{outline:2px solid color-mix(in srgb,var(--accent) 55%,transparent);outline-offset:-1px;border-radius:8px 0 0 8px}
+.codex-combo .codex-sel select{border-radius:0 8px 8px 0;max-width:44vw;width:auto}
+.combo-list{display:flex;flex-wrap:wrap;gap:5px;flex:1 1 100%}
+.combo-list:empty{display:none}
+.combo-opt{font-size:11.8px;line-height:1.4;padding:2px 9px;border-radius:999px;cursor:pointer;
+  background:var(--card-2);border:1px solid var(--line);color:var(--fg-dim)}
+.combo-opt:hover{border-color:var(--accent);color:var(--accent)}
+.combo-opt.on{background:var(--accent);border-color:var(--accent);color:#04121a;font-weight:700}
+.combo-empty{font-size:11.6px;color:var(--fg-mute)}
+/* 窄屏（手机）：每个筛选独占一行，输入框自动撑满 */
+@container (max-width:520px){
+  .codex-combo .codex-sel{flex:1 1 100%}
+  .codex-combo .codex-sel input{flex:1;width:auto}
+  .codex-combo .codex-sel select{max-width:42vw}
+}
 
 /* ==========================================================================
    平板 / 桌面
@@ -683,7 +753,7 @@ html:not([data-theme="light"]) .qflow .chip.qblade{color:#e2ccff}
   .grid.three{grid-template-columns:repeat(3,1fr)}
   .modal{align-items:center}
   .modal-panel{border-radius:18px;border-bottom:1px solid var(--line);max-height:82vh}
-  .dexgrid{grid-template-columns:repeat(auto-fill,minmax(168px,1fr))}
+  .dexgrid{grid-template-columns:repeat(auto-fill,minmax(168px,1fr));grid-auto-rows:72px}
   .map-canvas{height:440px}
   .mapcard{padding:16px}
 }

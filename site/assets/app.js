@@ -36,6 +36,8 @@
     if (!WIKI_EXISTS) {
       WIKI_EXISTS = {};
       window.X2.wikiExists.forEach(function (t) { WIKI_EXISTS[t] = 1; });
+      // 全量标题（含「花的零件:」「武器:」等其他命名空间），由 tools/fetch_wiki_titles_all.cjs 生成
+      (window.X2.wikiTitlesAll || []).forEach(function (t) { WIKI_EXISTS[t] = 1; });
     }
     var t = String(title).replace(/_/g, " ");
     if (WIKI_EXISTS[t]) return true;
@@ -249,13 +251,18 @@
     if ((X2.mapsData || {}).questIndex && X2.mapsData.questIndex[q.name])
       kv.push(["接取点", '<button type="button" class="qlink maplink quest" data-mk="quest" data-mn="' + esc(q.name) + '">在互动地图上查看</button>', true]);
     var reward = [];
-    if (q.gold) reward.push(q.gold + " G");
-    if (q.exp) reward.push("EXP " + q.exp);
-    if (q.sp) reward.push("SP " + q.sp);
-    if (q.dev) reward.push("发展度 +" + q.dev + (q.devRegion ? "（" + q.devRegion + "）" : ""));
-    if (q.trust) reward.push("信赖度 +" + q.trust);
-    if (q.rewards && q.rewards.length) reward.push(q.rewards.join("、"));
-    if (reward.length) kv.push(["报酬", reward.join("　")]);
+    if (q.gold) reward.push(esc(q.gold + " G"));
+    if (q.exp) reward.push(esc("EXP " + q.exp));
+    if (q.sp) reward.push(esc("SP " + q.sp));
+    if (q.dev) reward.push(esc("发展度 +" + q.dev + (q.devRegion ? "（" + q.devRegion + "）" : "")));
+    if (q.trust) reward.push(esc("信赖度 +" + q.trust));
+    // 报酬道具：名字在 linkables（物品）里的做成 wiki 外链；整行已是 HTML，渲染时不再二次处理
+    if (q.rewards && q.rewards.length) reward.push(q.rewards.map(function (n) {
+      var nm = String(n).replace(/\[\[|\]\]/g, "").replace(/^物品:/, "");
+      var hit = getLinkIndex().item[nm];
+      return hit ? wikiLink(hit.name, nm, "item") : esc(nm);
+    }).join("、"));
+    if (reward.length) kv.push(["报酬", reward.join("　"), true]);
     if (kv.length) {
       h.push('<div class="m-sec"><h4>基本信息</h4><dl class="kv">' +
         kv.map(function (r) { return "<dt>" + esc(r[0]) + "</dt><dd>" + (r[2] ? r[1] : renderLinks(r[1])) + "</dd>"; }).join("") + "</dl></div>");
@@ -608,40 +615,303 @@
   }
 
   /* ------------------------------------------------------------ 图鉴 */
-  function viewCodex(params) {
-    var cats = X2.codex || {};
-    var keys = Object.keys(cats);
-    var cur = (params && params.cat) || keys[0];
-    if (keys.indexOf(cur) === -1) cur = keys[0];
-    var data = cats[cur] || { title: cur, items: [] };
-    var h = ['<section class="hero"><h1>图鉴</h1><p>名称可直接点击跳转到 wiki 查看完整数值与获得方式。</p></section>'];
-    h.push('<div class="chiprow" style="margin-bottom:12px">' + keys.map(function (k) {
-      return '<button class="chip' + (k === cur ? " blue" : "") + '" type="button" data-codex="' + esc(k) + '">' +
-        esc((cats[k].title || k)) + " " + ((cats[k].items || []).length) + "</button>";
-    }).join("") + "</div>");
-    h.push('<div class="card tight"><div style="margin-bottom:9px"><input id="codexSearch" type="search" placeholder="筛选 ' + esc(data.title) + '…" style="width:100%;background:var(--card-2);border:1px solid var(--line);border-radius:9px;padding:9px 12px;color:var(--fg);font-size:15px"></div>');
-    // 稀有异刃：本页只列异刃本身，牵绊圆环不在图鉴里重复承载，统一引导到该异刃的 wiki 页
-    var items = cur === "blade" ? (data.items || []).filter(function (it) { return !/\/牵绊圆环$/.test(it.name); }) : (data.items || []);
-    if (cur === "blade") {
-      h.push('<p class="codex-note">牵绊圆环（开环条件、节点效果）不在此页重复收录——点任意异刃进入其 wiki 页面，' +
-        '在页面内即可查看完整的牵绊圆环。</p>');
+  /* 图鉴数据来自 site/data/codex_v2.js（按手机版 wiki 的游戏内分页口径生成）
+     异刃：列表与顺序以 APP 的 blade 表为准；下拉筛选 属性 / 类型 / 场景技能，
+           另有「全部 / 已收集 / 未收集」三态收集筛选（状态存进站点的完成状态，跟同步面板走）。
+     其余分类：搜索框 + 下拉筛选（核心晶片按等级排好、不设筛选；收藏道具 类型+地区；
+               宝藏 只有地区；产权证 地区；其余按 APP item_type）。
+     选项多的筛选（场景技能 / 饰品 / 辅助核心 / 收藏道具…）在下拉框旁多给一个联想输入框：
+     输入关键词出现候选词，点候选即选中；下拉框与输入框两种方式都可用。 */
+  var CODEX_CATS = ["异刃", "核心晶片", "饰品", "辅助核心", "收纳包道具", "收藏道具", "宝藏", "贵重品", "产权证"];
+  /* 旧的英文 cat 参数（书签 / 外部链接）兼容映射到新分类 */
+  var CODEX_ALIAS = {
+    blade: "异刃", auxcore: "辅助核心", accessory: "饰品", pouch: "收纳包道具",
+    corechip: "核心晶片", collect: "收藏道具", treasure: "宝藏", valuable: "贵重品", deed: "产权证",
+  };
+  function codexCatFromParam(cur) {
+    if (!cur) return "异刃";
+    if (CODEX_CATS.indexOf(cur) > -1) return cur;
+    if (CODEX_ALIAS[cur]) return CODEX_ALIAS[cur];
+    return "异刃";
+  }
+  var CODEX_KEY = function (cat) { return cat === "异刃" ? "blade" : cat; };
+  /* 图鉴页的筛选状态（每个分类各记一份） */
+  // 供测试脚本清空筛选（页面内不依赖这个挂载）
+  var codexState = { mood: {}, filters: {}, key: {} };
+  window.__codexState = codexState;
+  /* 当前图鉴分类（中文名），与 viewCodex 的规范化逻辑保持一致 */
+  function currentCodexCat() {
+    var r = parseHash();
+    return codexCatFromParam(r.params && r.params.cat);
+  }
+  function codexItems(cat) {
+    var d = (window.X2 && window.X2.codexV2) || {};
+    return d[CODEX_KEY(cat)] || [];
+  }
+  function codexCollectedSet() {
+    var M = window.X2Map;
+    return (M && M.exportDone) ? M.exportDone() : {};
+  }
+  function codexKey(cat, name) { return "codex:" + cat + ":" + name; }
+  function isCodexCollected(cat, name) {
+    var M = window.X2Map;
+    if (M && M.isFlag) return M.isFlag(codexKey(cat, name));
+    return !!codexCollectedSet()[codexKey(cat, name)];
+  }
+  function toggleCodexCollected(cat, name) {
+    var M = window.X2Map;
+    if (!M || !M.setFlag) return;
+    M.setFlag(codexKey(cat, name), !isCodexCollected(cat, name));
+  }
+  /* 各分类的筛选项（全部是下拉框）。稀有度只在有稀有度的分类出现。 */
+  function codexFacets(cat, items, meta) {
+    var uniq = function (arr) { return arr.filter(function (v, i) { return v && arr.indexOf(v) === i; }); };
+    var regions = (meta.regions || {})[cat] || [];
+    var rarities = (meta.rarities || {})[cat] || [];
+    var rarityFacet = rarities.length > 1 ? [{ key: "rarity", label: "稀有度", values: rarities }] : [];
+    if (cat === "异刃") {
+      var allFs = [];
+      items.forEach(function (it) { (it.fs || []).forEach(function (f) { if (allFs.indexOf(f) === -1) allFs.push(f); }); });
+      return [
+        { key: "element", label: "属性", values: uniq(items.map(function (i) { return i.element; })) },
+        { key: "role", label: "类型", values: uniq(items.map(function (i) { return i.role; })) },
+        { key: "fs", label: "场景技能", values: allFs.sort() },
+      ];
     }
-    h.push('<div class="dexgrid" id="dexgrid">' + items.map(function (it) {
-      var href = it.url || wikiUrl(it.name);
-      var ck = cur === "blade" ? "blade" : (cur === "unique" ? "enemy" : (cur === "auxcore" || cur === "accessory" || cur === "pouch" ? "item" : "term"));
-      // 按名称核验（it.url 只是同一目标的另一种写法，不能作为「存在」的依据）
-      var exists = wikiExists(it.name, ck);
-      // 圆环子页也要单独核验，避免点进去是空页面
-      var ring = cur === "blade" && wikiExists(it.name + "/牵绊圆环", "blade")
-        ? '<a class="dex-ring" href="' + esc(wikiUrl(it.name + "/牵绊圆环")) +
-          '" target="_blank" rel="noopener" title="在 wiki 查看牵绊圆环" data-name="' + esc(it.name) + '">圆环↗</a>' : "";
-      var inner = '<span class="dex-ico">' + esc(it.icon || it.name.slice(0, 1)) + "</span>" +
-        '<span><span class="dex-nm">' + esc(it.name) + '</span><span class="dex-meta">' + esc(it.meta || "") + "</span></span>";
-      var card = exists
-        ? '<a class="dex" href="' + esc(href) + '" target="_blank" rel="noopener" data-name="' + esc(it.name) + '">' + inner + "</a>"
-        : '<span class="dex dex-plain" data-name="' + esc(it.name) + '">' + inner + "</span>";   // wiki 无此页：不可点
-      return '<span class="dex-wrap">' + card + ring + "</span>";
-    }).join("") + "</div></div>");
+    if (cat === "核心晶片") return rarityFacet;             // 按等级排列，只筛稀有度
+    if (cat === "宝藏" || cat === "产权证") return rarityFacet.concat([{ key: "region", label: "地区", values: regions }]);
+    if (cat === "收藏道具") {
+      return rarityFacet.concat([
+        { key: "type", label: "类型", values: (meta.types || {})[cat] || [] },
+        { key: "region", label: "地区", values: regions },
+      ]);
+    }
+    return [{ key: "type", label: "类型", values: (meta.types || {})[cat] || [] }].concat(rarityFacet);
+  }
+  function codexMatches(cat, it) {
+    var sel = codexState.filters[cat] || {};
+    var k = (codexState.key[cat] || "").trim().toLowerCase();
+    if (k) {
+      var hay = [it.name, it.type, it.region, it.effect, it.element, it.role, (it.fs || []).join(" ")].join(" ").toLowerCase();
+      if (hay.indexOf(k) === -1) return false;
+    }
+    for (var f in sel) {
+      var v = sel[f];
+      if (!v) continue;
+      if (f === "fs") { if ((it.fs || []).indexOf(v) === -1) return false; }
+      else if (it[f] !== v) return false;
+    }
+    var mood = codexState.mood[cat] || "all";
+    if (mood !== "all") {
+      var got = isCodexCollected(cat, it.name);
+      if (mood === "got" && !got) return false;
+      if (mood === "not" && got) return false;
+    }
+    return true;
+  }
+  function codexUnknownRegion() {
+    var meta = ((window.X2 && window.X2.codexV2 && window.X2.codexV2.meta) || {});
+    return meta.unknownRegion || "地区未知";
+  }
+  /* 下拉筛选：data-facet 交给委托的 change 处理 */
+  function codexFacetHTML(facet, cat) {
+    var cur = (codexState.filters[cat] || {})[facet.key] || "";
+    var unknown = facet.key === "region" ? codexUnknownRegion() : "";
+    var values = facet.values.slice();
+    if (unknown && values.indexOf(unknown) === -1) values.push(unknown);   // 地区未知也允许从下拉选
+    var opts = values.map(function (v) {
+      return '<option value="' + esc(v) + '"' + (v === cur ? " selected" : "") + ">" + esc(v) + "</option>";
+    });
+    return '<label class="codex-sel"><span>' + esc(facet.label) + '</span><select data-facet="' + esc(facet.key) + '">' +
+      '<option value="">全部</option>' + opts.join("") + "</select></label>";
+  }
+
+  /* 列表区单独渲染，供搜索时局部刷新（不整页重绘，输入法不会被打断） */
+  function codexCardHTML(catName, it) {
+    var got = catName === "异刃" && isCodexCollected(catName, it.name);
+    // 元信息只放一行；分栏标题已经展示了分组，不再重复
+    var metaTxt;
+    if (catName === "异刃") metaTxt = [it.role, it.weapon, it.kind].filter(Boolean).join("・");
+    else if (catName === "核心晶片" || catName === "收纳包道具" || catName === "收藏道具") metaTxt = it.rarity || "";   // 等级只用于排序
+    else metaTxt = it.effect && it.effect !== it.type ? it.effect : (it.rarity || "");   // 饰品/辅助核心看效果，贵重品看说明
+    var eff = it.effect && it.effect !== it.type ? it.effect : "";
+    var tip = it.name + (metaTxt ? "｜" + metaTxt : "") + (eff ? "｜" + eff : "");
+    var tag = catName === "异刃"
+      ? '<button type="button" class="dex-got' + (got ? " on" : "") + '" data-codex-got="' + esc(it.name) + '" title="' +
+        (got ? "取消已收集" : "标记为已收集") + '" aria-pressed="' + (got ? "true" : "false") + '">' + (got ? "✓" : "") + "</button>"
+      : "";
+    var inner = '<span class="dex-ico">' + esc(it.name.slice(0, 1)) + "</span>" +
+      '<span class="dex-body"><span class="dex-nm">' + esc(it.name) + '</span>' +
+      (metaTxt ? '<span class="dex-meta">' + esc(metaTxt) + "</span>" : "") + "</span>";
+    var card;
+    if (it.url) {
+      card = '<a class="dex" href="' + esc(it.url) + '" target="_blank" rel="noopener" title="' + esc(tip) + '" data-name="' + esc(it.name) + '">' + inner + "</a>";
+    } else if (catName === "贵重品") {
+      // 没有 wiki 页的贵重品：点击弹出 APP 数据（名称 / 类型 / 获取途径 / 说明）
+      card = '<button type="button" class="dex dex-more" title="' + esc(tip) + '" data-dexpop="' + esc(it.name) + '">' + inner +
+        '<span class="dex-more-i" aria-hidden="true">i</span></button>';
+    } else {
+      card = '<span class="dex dex-plain" title="' + esc(tip) + '" data-name="' + esc(it.name) + '">' + inner + "</span>";
+    }
+    return '<span class="dex-wrap' + (got ? " got" : "") + '">' + card + tag + "</span>";
+  }
+  /* 分栏顺序：属性按游戏内顺序；核心晶片 普通→稀有→史诗；类型/效果按下面的人工顺序 */
+  var ELEMENT_ORDER = ["火", "水", "雷", "风", "冰", "光", "暗", "地"];
+  var GROUP_ORDER_OVERRIDE = {
+    "收纳包道具": ["主食", "肉类", "蔬菜", "鱼类", "甜品", "饮料", "纺织品", "化妆品", "书籍", "乐器", "美术品", "桌游"],
+    "贵重品": ["关键物品", "任务物品", "信息道具", "技能RAM", "其他"],
+    "饰品": ["攻击强化", "防御强化", "回复强化", "HP回复", "HP增加", "属性强化", "会心强化", "连击强化", "仇恨增加", "仇恨降低",
+      "回避强化", "格挡强化", "抗性强化", "特殊效果", "战斗强化", "牵绊强化", "异刃强化", "武器强化", "反应强化", "队伍槽强化",
+      "连锁攻击强化", "掉落强化", "复活强化"],
+    "辅助核心": ["攻击强化", "防御强化", "HP回复", "属性强化", "会心强化", "连击强化", "仇恨增加", "仇恨降低",
+      "回避强化", "格挡强化", "抗性强化", "特殊效果", "战斗强化", "牵绊强化", "异刃强化", "种族特效"],
+    "收藏道具": ["矿石", "花草", "树木", "蔬菜", "鱼", "虫", "机械", "敌人掉落"],
+  };
+  function codexGroupOrder(cat, meta) {
+    if (cat === "异刃") return ELEMENT_ORDER;
+    if (cat === "核心晶片") return ["普通", "稀有", "史诗"];
+    if (GROUP_ORDER_OVERRIDE[cat]) {
+      // 覆盖表里没列到的类型排在后面（按名称）
+      var rest = [];
+      (window.X2.codexV2[CODEX_KEY(cat)] || []).forEach(function (it) {
+        if (it.type && rest.indexOf(it.type) === -1 && GROUP_ORDER_OVERRIDE[cat].indexOf(it.type) === -1) rest.push(it.type);
+      });
+      return GROUP_ORDER_OVERRIDE[cat].concat(rest.sort());
+    }
+    return (meta.regions || {})[cat] || [];
+  }
+  function codexGridHTML(catName) {
+    var meta = ((window.X2 && window.X2.codexV2 && window.X2.codexV2.meta) || {});
+    var items = codexItems(catName);
+    var shown = items.filter(function (it) { return codexMatches(catName, it); });
+    var h = ['<div class="codex-count">显示 ' + shown.length + " / " + items.length + " 条</div>"];
+    if (!shown.length) {
+      h.push('<div class="empty">没有符合当前条件的条目，换个筛选或清空搜索试试。</div>');
+      return h.join("");
+    }
+    var order = codexGroupOrder(catName, meta);
+    var rank = function (g) { var i = order.indexOf(g); return i < 0 ? 999 : i; };
+    var groups = [], byGroup = {};
+    shown.forEach(function (it) {
+      var g = it.group || "其他";
+      if (!byGroup[g]) { byGroup[g] = []; groups.push(g); }
+      byGroup[g].push(it);
+    });
+    groups.sort(function (a, b) { return rank(a) - rank(b) || (a < b ? -1 : 1); });
+    groups.forEach(function (g) {
+      h.push('<div class="dex-region">' + esc(g) + " <span class=\"dex-gn\">" + byGroup[g].length + "</span></div>");
+      h.push('<div class="dexgrid">' + byGroup[g].map(function (it) { return codexCardHTML(catName, it); }).join("") + "</div>");
+    });
+    return h.join("");
+  }
+  function refreshCodexGrid(catName) {
+    var box = $("#codexList");
+    if (box) box.innerHTML = codexGridHTML(catName);
+  }
+  /* 没有 wiki 页面的图鉴条目（主要是贵重品）：弹窗展示 APP 数据 */
+  /* 弹窗文本里的 NPC / 敌人：在地图索引里能找到的，做成按钮，点了在右侧侧边地图上定位。
+     只链 3 字以上的名字（2 字名太容易误伤），并从长到短匹配，避免「尖角龙鱼」抢在长名前面。 */
+  var popMapCache = null;
+  function popLocNames() {
+    if (popMapCache) return popMapCache;
+    var md = X2.mapsData || {};
+    var out = { npc: {}, enemy: {}, list: [] };
+    // NPC 索引优先于敌人索引：同名（如「梅勒芙」）时按 NPC 处理，否则定位层会用错
+    ["npcIndex", "enemyIndex"].forEach(function (k) {
+      Object.keys(md[k] || {}).forEach(function (n) {
+        if (!n || n.length < 3 || out[k === "npcIndex" ? "npc" : "enemy"][n]) return;
+        if (out.npc[n] || out.enemy[n]) return;
+        out[k === "npcIndex" ? "npc" : "enemy"][n] = 1;
+        out.list.push(n);
+      });
+    });
+    out.list.sort(function (a, b) { return b.length - a.length; });
+    out.re = out.list.length ? new RegExp("(" + out.list.map(function (n) { return n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }).join("|") + ")", "g") : null;
+    popMapCache = out;
+    return out;
+  }
+  function popLinks(text) {
+    var t = esc(text == null ? "" : String(text)).replace(/\n/g, "<br>");
+    var lc = popLocNames();
+    if (!lc.re) return t;
+    return t.replace(lc.re, function (name, _g, off, whole) {
+      // 已经被包进标签/按钮里的不重复包（如 <br> 后面的名字是独立的，仍然要包）
+      var before = whole.slice(0, off);
+      if (before.lastIndexOf("<") > before.lastIndexOf(">")) return name;
+      var kind = lc.npc[name] ? "npc" : "enemy";
+      return '<button type="button" class="qlink maplink ' + kind + '" data-dexloc="' + esc(name) + '" data-dexkind="' + kind + '" title="在右侧地图上定位">' + name + "</button>";
+    });
+  }
+  /* 没有 wiki 页面的图鉴条目（主要是贵重品）：弹窗展示 APP 数据 */
+  function showCodexPopup(name) {
+    var d = (window.X2 && window.X2.codexV2) || {};
+    var cats = CODEX_CATS.filter(function (c) { return c !== "异刃"; });
+    var cat = "", it = null;
+    for (var i = 0; i < cats.length && !it; i++) {
+      (d[cats[i]] || []).forEach(function (x) { if (!it && x.name === name) { cat = cats[i]; it = x; } });
+    }
+    if (!it) return;
+    var rows = [["类型", it.type || "—"]];
+    if (it.region) rows.push(["地区", it.region]);
+    if (it.source) rows.push(["获取途径", it.source]);
+    if (it.sell) rows.push(["出售价格", it.sell + " G"]);
+    var h = ['<h2>' + esc(name) + "</h2>"];
+    h.push('<div class="m-sec"><h4>基本信息</h4><dl class="kv">' +
+      rows.map(function (r) { return "<dt>" + esc(r[0]) + "</dt><dd>" + popLinks(r[1]) + "</dd>"; }).join("") +
+      "</dl></div>");
+    if (it.effect) h.push('<div class="m-sec"><h4>说明</h4><p>' + popLinks(it.effect) + "</p></div>");
+    openModal(h.join(""), name);
+  }
+
+  function viewCodex(params) {
+    var catName = codexCatFromParam(params && params.cat);
+    var meta = ((window.X2 && window.X2.codexV2 && window.X2.codexV2.meta) || {});
+    var items = codexItems(catName);
+    var gotCount = 0;
+    if (catName === "异刃") items.forEach(function (it) { if (isCodexCollected(catName, it.name)) gotCount++; });
+
+    var hint = catName === "异刃"
+      ? "按属性分栏；可标记已收集，并可按属性 / 类型 / 场景技能筛选。"
+      : catName === "核心晶片" ? "按稀有度分栏，栏内按等级从低到高排列。"
+      : catName === "饰品" || catName === "辅助核心" ? "按效果分栏，可按效果与稀有度筛选。"
+      : catName === "收纳包道具" ? "按类型分栏，可按类型与稀有度筛选。"
+      : catName === "贵重品" ? "按类型分栏；没有 wiki 页面的条目点开可看名称、类型与获取途径。"
+      : catName === "宝藏" ? "按地区分栏，地区顺序与主线流程一致，可按稀有度筛选。"
+      : catName === "收藏道具" ? "按类型分栏，地区顺序与主线流程一致，可按类型 / 地区 / 稀有度筛选。"
+      : "按地区分栏，地区顺序与主线流程一致。";
+    var h = ['<section class="hero"><h1>图鉴</h1><p>共 ' + CODEX_CATS.reduce(function (a, c) { return a + codexItems(c).length; }, 0) +
+      ' 条。分类与数据按手机版 APP 的游戏内分页整理；wiki 有对应页面时名称可点击查看。' + hint + "</p></section>"];
+
+    /* 分类标签 */
+    h.push('<div class="chiprow" style="margin-bottom:12px">' + CODEX_CATS.map(function (c) {
+      // data-codex 存原始分类名，点击时再 encodeURIComponent 一次；
+      // 这里若先编码一次、点击又编码一次，parseHash 解码一次后会对不上中文分类（只剩下「异刃」能进）
+      var ck = c === "异刃" ? "blade" : c;
+      return '<button class="chip' + (c === catName ? " blue" : "") + '" type="button" data-codex="' + esc(ck) + '">' +
+        esc(c) + " " + codexItems(c).length + "</button>";
+    }).join("") + "</div>");
+
+    /* 搜索 + 筛选 */
+    h.push('<div class="card tight codex-tools">');
+    h.push('<input id="codexSearch" type="search" placeholder="搜索 ' + esc(catName) +
+      '（名称 / 效果 / 类型…）" value="' + esc(codexState.key[catName] || "") + '" autocomplete="off" enterkeyhint="search">');
+    var facets = codexFacets(catName, items, meta);
+    if (facets.length) {
+      // 每个筛选都是「输入框 + 右侧下拉」：既可以输入关键词联想，也可以点下拉选全量
+      h.push('<div class="codex-sels">' + facets.map(function (f) { return codexFacetHTML(f, catName); }).join("") + "</div>");
+    }
+    /* 收集筛选（只有异刃）：全部 / 已收集 / 未收集 三态 */
+    if (catName === "异刃") {
+      var mood = codexState.mood[catName] || "all";
+      h.push('<div class="codex-sels"><div class="seg" role="group" aria-label="按收集状态筛选">' +
+        [["all", "全部"], ["got", "已收集"], ["not", "未收集"]].map(function (m) {
+          return '<button type="button" class="chip' + (mood === m[0] ? " blue" : "") + '" data-cmood="' + m[0] + '">' + m[1] + "</button>";
+        }).join("") + '<span class="codex-gotn">已收集 <b>' + gotCount + "</b> / " + items.length + "</span></div></div>");
+    }
+    h.push("</div>");
+
+    /* 列表（单独包一层，搜索时只刷新这里） */
+    h.push('<div id="codexList" data-cat="' + esc(catName) + '">' + codexGridHTML(catName) + "</div>");
     return h.join("");
   }
 
@@ -855,7 +1125,46 @@
     var qc = t.closest("[data-qcat]");
     if (qc) { questFilter.cat = qc.getAttribute("data-qcat"); render(); return; }
     var cx = t.closest("[data-codex]");
-    if (cx) { location.hash = "#/codex?cat=" + encodeURIComponent(cx.getAttribute("data-codex")); return; }
+    if (cx) {
+      var ck = cx.getAttribute("data-codex");
+      codexState.key = {};
+      location.hash = "#/codex?cat=" + encodeURIComponent(ck);
+      return;
+    }
+    // 图鉴：下拉筛选（旧版 chip 的 data-fv 写法已废弃，只认 select 的 change）
+    // 图鉴：收集状态三态（全部 / 已收集 / 未收集）
+    var cm = t.closest("[data-cmood]");
+    if (cm) {
+      var c3 = currentCodexCat();
+      codexState.mood[c3] = cm.getAttribute("data-cmood");
+      render();
+      return;
+    }
+    // 图鉴：标记已收集
+    var gt = t.closest("[data-codex-got]");
+    if (gt) {
+      e.preventDefault();
+      toggleCodexCollected(currentCodexCat(), gt.getAttribute("data-codex-got"));
+      render();
+      return;
+    }
+    // 图鉴：无 wiki 的贵重品 / 其他条目 → 弹窗显示 APP 数据
+    var dp = t.closest("[data-dexpop]");
+    if (dp) {
+      e.preventDefault();
+      showCodexPopup(dp.getAttribute("data-dexpop"));
+      return;
+    }
+    // 图鉴弹窗里的 NPC / 敌人：在右侧侧边地图上定位
+    var dl = t.closest("[data-dexloc]");
+    if (dl) {
+      e.preventDefault();
+      var M2 = window.X2Map;
+      if (!M2 || !M2.focusInDock) { toast("地图数据未加载"); return; }
+      var got = M2.focusInDock(dl.getAttribute("data-dexkind"), dl.getAttribute("data-dexloc"));
+      if (!got) toast("互动地图上找不到「" + dl.getAttribute("data-dexloc") + "」的位置");
+      return;
+    }
     var mv = t.closest("[data-magvol]");
     if (mv) { location.hash = "#/mag?vol=" + encodeURIComponent(mv.getAttribute("data-magvol")); return; }
     var img = t.closest("[data-zoom]");
@@ -876,12 +1185,22 @@
       if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch (err) {} }
     }
     if (e.target.id === "codexSearch") {
-      var k = e.target.value.trim().toLowerCase();
-      $$("#dexgrid .dex").forEach(function (a) {
-        a.style.display = a.getAttribute("data-name").toLowerCase().indexOf(k) > -1 ? "" : "none";
-      });
+      var cat = currentCodexCat();
+      codexState.key[cat] = e.target.value;
+      // 只刷新列表，不整页重绘：重绘会替换掉正在输入的输入框，
+      // 中文输入法的组词框会跟着一起消失（手机上表现为「输入法弹不出来」）
+      refreshCodexGrid(cat);
     }
     if (e.target.id === "searchInput") runSearch(e.target.value);
+  });
+  /* 图鉴下拉筛选：选择后只刷新列表（不整页重绘，保留滚动位置） */
+  document.addEventListener("change", function (e) {
+    var sel = e.target.closest("select[data-facet]");
+    if (!sel) return;
+    var cat = currentCodexCat();
+    var f = codexState.filters[cat] = codexState.filters[cat] || {};
+    f[sel.getAttribute("data-facet")] = sel.value;
+    refreshCodexGrid(cat);
   });
 
   /* ------------------------------------------------------------ 搜索 */
@@ -990,8 +1309,9 @@
     });
   }
 
-  function setDock(open) {
+  function setDock(open, chapterId) {
     dockOpen = !!open;
+    if (chapterId) dockChapterId = chapterId;   // 从图鉴等页面定位时，指定侧边地图显示的章节
     var dock = $("#mapDock"), btn = $("#mapDockBtn");
     dock.hidden = !dockOpen;
     btn.classList.toggle("is-open", dockOpen);
@@ -1008,5 +1328,5 @@
   /* ------------------------------------------------------------ 启动 */
   buildNav();
   render();
-  window.X2App = { openModal: openModal, closeModal: closeModal, showQuest: showQuest, render: render, openDock: function () { setDock(true); } };
+  window.X2App = { openModal: openModal, closeModal: closeModal, showQuest: showQuest, render: render, openDock: function (chapterId) { setDock(true, chapterId); } };
 })();
