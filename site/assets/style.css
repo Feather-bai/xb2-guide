@@ -448,10 +448,11 @@ figcaption{font-size:12.4px;color:var(--fg-mute);margin-top:5px}
 .hits-g{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:5px 10px;margin-bottom:7px}
 .hits-g h5{grid-column:1/-1;margin:2px 0 3px;font-size:11.4px;color:var(--fg-mute);font-weight:600;letter-spacing:.03em}
 .hit{display:flex;gap:6px;align-items:baseline;justify-content:space-between;text-align:left;cursor:pointer;
-  background:var(--card);border:1px solid var(--line);border-radius:8px;padding:5px 9px;font:inherit;font-size:13px;color:var(--fg)}
+  background:var(--card);border:1px solid var(--line);border-radius:8px;padding:5px 9px;font:inherit;font-size:13px;color:var(--fg);
+  min-width:0}
 .hit:hover{border-color:var(--accent);color:var(--accent)}
-.hit-n{font-weight:600}
-.hit-s{font-size:11.4px;color:var(--fg-mute)}
+.hit-n{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.hit-s{font-size:11.4px;color:var(--fg-mute);flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right}
 /* 多位置选择弹层 */
 .x2picker{position:fixed;inset:0;z-index:90;display:grid;place-items:center;background:rgba(4,10,20,.6);padding:16px}
 .x2picker-panel{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px;max-width:420px;width:100%;box-shadow:var(--shadow)}
@@ -559,6 +560,9 @@ html[data-theme="light"] .leaflet-container .leaflet-control-attribution{backgro
 .mapdock-head{display:flex;align-items:center;gap:8px;padding:9px 11px;border-bottom:1px solid var(--line);flex:0 0 auto}
 .mapdock-title{font-weight:650;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mapdock-actions{margin-left:auto;display:flex;align-items:center;gap:8px}
+.mapdock-chap{max-width:9.6em;background:var(--card-2);color:var(--fg);border:1px solid var(--line);
+  border-radius:7px;padding:3px 6px;font:inherit;font-size:12.4px;cursor:pointer}
+.mapdock-chap:focus{outline:2px solid color-mix(in srgb,var(--accent) 55%,transparent);outline-offset:1px}
 .mapdock-link{font-size:11.8px;color:var(--accent);white-space:nowrap}
 .mapdock-close{width:30px;height:30px}
 .mapdock-body{flex:1 1 auto;overflow:auto;padding:10px 11px 12px}

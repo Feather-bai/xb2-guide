@@ -815,32 +815,79 @@
   function popLocNames() {
     if (popMapCache) return popMapCache;
     var md = X2.mapsData || {};
-    var out = { npc: {}, enemy: {}, list: [] };
+    var out = { npc: {}, enemy: {}, list: [], shortList: [] };
     // NPC 索引优先于敌人索引：同名（如「梅勒芙」）时按 NPC 处理，否则定位层会用错
     ["npcIndex", "enemyIndex"].forEach(function (k) {
       Object.keys(md[k] || {}).forEach(function (n) {
-        if (!n || n.length < 3 || out[k === "npcIndex" ? "npc" : "enemy"][n]) return;
+        if (!n || n.length < 2 || out[k === "npcIndex" ? "npc" : "enemy"][n]) return;
         if (out.npc[n] || out.enemy[n]) return;
         out[k === "npcIndex" ? "npc" : "enemy"][n] = 1;
-        out.list.push(n);
+        (n.length >= 3 ? out.list : out.shortList).push(n);
       });
     });
     out.list.sort(function (a, b) { return b.length - a.length; });
-    out.re = out.list.length ? new RegExp("(" + out.list.map(function (n) { return n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }).join("|") + ")", "g") : null;
+    out.shortList.sort(function (a, b) { return b.length - a.length; });
+    out.re = out.list.length ? new RegExp("(" + out.list.map(escRe).join("|") + ")", "g") : null;
+    // 2 字名（如崔娜）只在左边不是汉字时匹配：「制派女子 崔娜那里」命中；嵌在别的词里的「租金」之类不误伤
+    out.reShort = out.shortList.length
+      ? new RegExp("(?<![\\u4e00-\\u9fff])(" + out.shortList.map(escRe).join("|") + ")", "g")
+      : null;
     popMapCache = out;
     return out;
   }
   function popLinks(text) {
-    var t = esc(text == null ? "" : String(text)).replace(/\n/g, "<br>");
-    var lc = popLocNames();
-    if (!lc.re) return t;
-    return t.replace(lc.re, function (name, _g, off, whole) {
-      // 已经被包进标签/按钮里的不重复包（如 <br> 后面的名字是独立的，仍然要包）
-      var before = whole.slice(0, off);
-      if (before.lastIndexOf("<") > before.lastIndexOf(">")) return name;
-      var kind = lc.npc[name] ? "npc" : "enemy";
-      return '<button type="button" class="qlink maplink ' + kind + '" data-dexloc="' + esc(name) + '" data-dexkind="' + kind + '" title="在右侧地图上定位">' + name + "</button>";
+    // 任务链接 [[任务:名|显示名]] 先换成占位符，最后再还原为可点按钮（避免被 NPC 名匹配误伤）
+    var raw = String(text == null ? "" : text);
+    var tokens = [];
+    var PO = String.fromCharCode(0xe100), PC = String.fromCharCode(0xe101);
+    raw = raw.replace(/\[\[敌人:([^\]|]+)(?:\|([^\]]+))?\]\]/g, function (_, en, label) {
+      tokens.push({ enemy: en, label: label || en });
+      return PO + (tokens.length - 1) + PC;
     });
+    raw = raw.replace(/\[\[外链:([^\]|]+)(?:\|([^\]]+))?\]\]/g, function (_, href, label) {
+      tokens.push({ href: href, label: label || href });
+      return PO + (tokens.length - 1) + PC;
+    });
+    raw = raw.replace(/\[\[任务:([^\]|]+)\|([^\]]+)\]\]/g, function (_, q, label) {
+      tokens.push({ q: q, label: label });
+      return PO + (tokens.length - 1) + PC;
+    });
+    var t = esc(raw).split(String.fromCharCode(10)).join("<br>");
+    // 「任务名」：任务库里有这条任务就做成按钮（人工整理的获取途径里常见这种写法）
+    var qIdx = {};
+    (X2.quests || []).forEach(function (q) { qIdx[q.name] = 1; });
+    t = t.replace(/「([^」]{2,24})」/g, function (m, qname) {
+      if (!qIdx[qname]) return m;
+      return "「" + '<button type="button" class="qlink" data-quest="' + esc(qname) + '" title="打开任务详情">' + esc(qname) + "</button>" + "」";
+    });
+    var lc = popLocNames();
+    if (lc.re) {
+      t = t.replace(lc.re, function (name, _g, off, whole) {
+        // 已经被包进标签/按钮里的不重复包（如 <br> 后面的名字是独立的，仍然要包）
+        var before = whole.slice(0, off);
+        if (before.lastIndexOf("<") > before.lastIndexOf(">")) return name;
+        var kind = lc.npc[name] ? "npc" : "enemy";
+        return '<button type="button" class="qlink maplink ' + kind + '" data-dexloc="' + esc(name) + '" data-dexkind="' + kind + '" title="在右侧地图上定位">' + name + "</button>";
+      });
+    }
+    // 2 字名（崔娜、巴恩…）单独一轮：只在左边不是汉字时命中，避免把「租金」这类普通词连成链接
+    if (lc.reShort) {
+      t = t.replace(lc.reShort, function (name, _g, off, whole) {
+        var before = whole.slice(0, off);
+        if (before.lastIndexOf("<") > before.lastIndexOf(">")) return name;
+        if (/<button[^>]*$/.test(before)) return name;
+        var kind = lc.npc[name] ? "npc" : "enemy";
+        return '<button type="button" class="qlink maplink ' + kind + '" data-dexloc="' + esc(name) + '" data-dexkind="' + kind + '" title="在右侧地图上定位">' + name + "</button>";
+      });
+    }
+    var reTok = new RegExp(PO + "(\\d+)" + PC, "g");
+    t = t.replace(reTok, function (_, i) {
+      var tk = tokens[+i];
+      if (tk.q) return '<button type="button" class="qlink" data-quest="' + esc(tk.q) + '" title="打开任务详情">' + esc(tk.label) + "</button>";
+      if (tk.enemy) return '<button type="button" class="qlink maplink enemy" data-dexloc="' + esc(tk.enemy) + '" data-dexkind="enemy" title="在右侧地图上定位">' + esc(tk.label) + "</button>";
+      return '<a class="qlink" href="' + esc(wikiUrl(tk.href)) + '" target="_blank" rel="noopener">' + esc(tk.label) + " ↗</a>";
+    });
+    return t;
   }
   /* 没有 wiki 页面的图鉴条目（主要是贵重品）：弹窗展示 APP 数据 */
   function showCodexPopup(name) {
@@ -1216,6 +1263,26 @@
       searchIndex.push({ t: q.name, d: [q.cat, (q.place || []).join("・"), q.cond].filter(Boolean).join(" ｜ ").slice(0, 80), g: "任务库", q: q.name });
     });
     (X2.systems || []).forEach(function (s) { searchIndex.push({ t: s.title, d: s.desc || "", g: "系统与养成", h: "#/systems/" + s.id }); });
+    // 图鉴 v2（九页）：名称 + 类型/地区，点结果直接进对应分类
+    var md2 = (X2.mapsData || {});
+    (function () {
+      var d = X2.codexV2 || {};
+      Object.keys(d).forEach(function (k) {
+        if (k === "meta" || !Array.isArray(d[k])) return;
+        var cat = k === "blade" ? "异刃" : k;
+        d[k].forEach(function (it) {
+          var extra = [it.type, it.region, it.element, it.role].filter(Boolean).join(" ｜ ");
+          searchIndex.push({ t: it.name, d: cat + (extra ? " ｜ " + extra : ""), g: "图鉴", c: cat, u: it.url });
+        });
+      });
+      ["npcIndex", "enemyIndex", "itemIndex"].forEach(function (ik) {
+        var kind = ik === "npcIndex" ? "npc" : ik === "enemyIndex" ? "enemy" : "item";
+        var label = kind === "npc" ? "NPC" : kind === "enemy" ? "敌人" : "道具";
+        Object.keys(md2[ik] || {}).forEach(function (n) {
+          searchIndex.push({ t: n, d: label + " · 在互动地图上定位", g: "地图", m: kind });
+        });
+      });
+    })();
     Object.keys(X2.codex || {}).forEach(function (k) {
       ((X2.codex[k] || {}).items || []).forEach(function (it) {
         searchIndex.push({ t: it.name, d: (X2.codex[k].title || k) + (it.meta ? " ｜ " + it.meta : ""), g: "图鉴", u: it.url });
@@ -1235,7 +1302,7 @@
     hits.forEach(function (h) { (groups[h.g] = groups[h.g] || []).push(h); });
     box.innerHTML = Object.keys(groups).map(function (g) {
       return '<div class="sr-group"><h4>' + esc(g) + "</h4>" + groups[g].map(function (h) {
-        return '<button class="sr-hit" type="button" data-sr="' + esc(JSON.stringify({ h: h.h || "", q: h.q || "", u: h.u || "" })) + '">' +
+        return '<button class="sr-hit" type="button" data-sr="' + esc(JSON.stringify({ n: h.t || "", h: h.h || "", q: h.q || "", u: h.u || "", c: h.c || "", m: h.m || "" })) + '">' +
           '<span class="sr-n">' + esc(h.t) + '</span><span class="sr-d">' + esc(h.d) + "</span></button>";
       }).join("") + "</div>";
     }).join("");
@@ -1257,8 +1324,15 @@
     if (!hit) return;
     var d = JSON.parse(hit.getAttribute("data-sr"));
     closeSearch();
+    if (d.m) {
+      // 地图实体：打开侧边地图并定位
+      var M3 = window.X2Map;
+      if (M3 && M3.focusInDock && d.n) M3.focusInDock(d.m, d.n);
+      return;
+    }
     if (d.q) showQuest(d.q);
     else if (d.h) location.hash = d.h;
+    else if (d.c) location.hash = "#/codex?cat=" + encodeURIComponent(d.c === "异刃" ? "异刃" : d.c);
     else if (d.u) window.open(d.u, "_blank", "noopener");
   });
 
@@ -1302,6 +1376,16 @@
     body.appendChild(card);
     $("#mapDockTitle").textContent = ch.num + " · 互动地图";
     $("#mapDockGo").setAttribute("href", "#/story/" + ch.id);
+    // 章节切换：侧边地图就地换章节，不用回流程页
+    var sel = $("#mapDockChapter");
+    if (sel && !sel.options.length) {
+      sel.innerHTML = (X2.chapters || []).map(function (c) {
+        return '<option value="' + esc(c.id) + '">' + esc(c.num + " " + c.title) + "</option>";
+      }).join("");
+      // 用事件委托：buildDock 会反复重建地图卡片，但 <select> 本身不重建
+      sel.addEventListener("change", function () { setDock(true, sel.value); });
+    }
+    if (sel) sel.value = ch.id;
     var raf = window.requestAnimationFrame || function (fn) { return setTimeout(fn, 0); };
     raf(function () {
       try { card._showMap(); } catch (e) {}

@@ -334,6 +334,80 @@ ok("图鉴卡片高度一致（不留空位）", (function () {
 window.location.hash = "#/codex?cat=blade";
 window.dispatchEvent(new window.Event("hashchange"));
 
+// 侧边地图：章节切换 + 全局搜索（不限于当前章节）
+(function(){
+  document.getElementById("mapDockBtn").dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  var dock = document.getElementById("mapDock");
+  ok("侧边地图有章节切换下拉", !!document.getElementById("mapDockChapter") && document.getElementById("mapDockChapter").options.length === 10);
+  ok("侧边地图搜索框是全局搜索", /全图搜索/.test((dock.querySelector(".map-search") || {}).placeholder || ""));
+})();
+ok("弹窗里的任务名可点开任务详情", (function(){
+  window.location.hash = "#/codex?cat=" + encodeURIComponent("贵重品");
+  window.dispatchEvent(new window.Event("hashchange"));
+  var b = Array.prototype.filter.call(view.querySelectorAll("#codexList .dex-more"), function (x) {
+    return x.querySelector(".dex-nm").textContent === "星织的核心水晶";
+  })[0];
+  if (!b) return false;
+  b.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  var qb = document.querySelector("#modalBody [data-quest]");
+  if (!qb) return false;
+  qb.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  var okk = document.getElementById("modalBody").innerHTML.indexOf("异刃的记忆") > -1;
+  document.getElementById("modalClose").dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  return okk;
+})());
+window.location.hash = "#/codex?cat=blade";
+window.dispatchEvent(new window.Event("hashchange"));
+
+// 全站搜索：图鉴 v2 条目可直接进分类；地图实体可直接定位
+ok("全站搜索能搜到图鉴 v2 条目并进分类", (function(){
+  document.getElementById("searchBtn").dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  var si2 = document.getElementById("searchInput");
+  si2.value = "花俏";
+  si2.dispatchEvent(new window.Event("input", { bubbles: true }));
+  var h = document.querySelector("#searchResults .sr-hit");
+  if (!h) return false;
+  h.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  return decodeURIComponent(window.location.hash).indexOf("cat=收藏道具") > -1;
+})());
+ok("全站搜索能定位地图上的敌人", (function(){
+  document.getElementById("searchBtn").dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  var si2 = document.getElementById("searchInput");
+  si2.value = "长老蜘蛛";
+  si2.dispatchEvent(new window.Event("input", { bubbles: true }));
+  var hits = Array.prototype.slice.call(document.querySelectorAll("#searchResults .sr-hit"));
+  var h = hits.filter(function (b) { return /在互动地图上定位/.test(b.textContent); })[0];
+  if (!h) return false;
+  h.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  return document.getElementById("mapDock").hidden === false;
+})());
+
+// 地图 NPC：同坐标的不同 NPC 不能被合并（萨雷斯 / 彻班 在托里格镇几乎同一处）
+ok("托里格镇同时有萨雷斯与彻班的点位", (function(){
+  var t = window.X2Map.locateTargets("npc", "萨雷斯");
+  var c = window.X2Map.locateTargets("npc", "彻班");
+  var m = (window.X2.mapsData.maps || []).filter(function (x) { return x.id === "ma05a_c_03"; })[0] || { npc: [] };
+  var sn = (m.npc || []).filter(function (p) { return p.n === "萨雷斯"; }).length;
+  var cn = (m.npc || []).filter(function (p) { return p.n === "彻班"; }).length;
+  return t.length > 0 && c.length > 0 && sn >= 1 && cn >= 2;
+})());
+
+ok("弹窗里的「任务名」和 2 字 NPC 名都能点", (function(){
+  window.location.hash = "#/codex?cat=" + encodeURIComponent("贵重品");
+  window.dispatchEvent(new window.Event("hashchange"));
+  var b = Array.prototype.filter.call(view.querySelectorAll("#codexList .dex-more"), function (x) {
+    return x.querySelector(".dex-nm").textContent === "阳光派的食谱";
+  })[0];
+  if (!b) return false;
+  b.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  var body = document.getElementById("modalBody");
+  var q = body.querySelector("[data-quest]");
+  var n = body.querySelector("[data-dexloc]");
+  var okk = !!q && q.textContent === "鲜艳的水果馅饼" && !!n && n.textContent === "崔娜";
+  document.getElementById("modalClose").dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  return okk;
+})());
+
 // 遍历全部章节：要点等结构化内容不能被渲染成 [object Object]
 let objLeak = 0, keypointTitles = 0, emptyNotes = 0;
 for (const c of X2.chapters || []) {

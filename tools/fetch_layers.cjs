@@ -141,13 +141,27 @@ async function main() {
       db.close();
     } catch (e) { console.log("  APK 读取失败：", e.message); }
   }
+  // 名称优先用 wiki 的「NPC 页 Pop → data-gmk-id」映射（tools/fetch_npc_gmk_map.cjs）：
+  // APK npc_game_appearance 缺行（萨雷斯的 npc41300027_03）或错位时以 wiki 为准。
+  const wikiGmk = {};
+  const wikiGmkFile = path.join(__dirname, "npc_gmk_map.json");
+  if (fs.existsSync(wikiGmkFile)) {
+    try {
+      const w = JSON.parse(fs.readFileSync(wikiGmkFile, "utf8"));
+      for (const [g, v] of Object.entries(w)) if (v && v.name) wikiGmk[g] = v.name;
+    } catch (e) { console.log("  npc_gmk_map 读取失败：", e.message); }
+  }
+  const nameOf = (g) => wikiGmk[g] || npcName[g] || "";
+  // 去重键带上「名字」：同一坐标上可能有多个不同 NPC（如萨雷斯与彻班站位只差几单位，
+  //   甚至完全重合），只按坐标去重会把其中一个整点丢掉。
   const seenN = new Set();
   const npc = [];
   for (const e of gmkNpc) {
-    const k = (+e.PosX).toFixed(2) + "," + (+e.PosZ).toFixed(2) + "," + (e.areas || []).filter(Boolean).join("|");
+    const nm = nameOf(e.Name);
+    const k = (+e.PosX).toFixed(2) + "," + (+e.PosZ).toFixed(2) + "," + (e.areas || []).filter(Boolean).join("|") + "|" + nm;
     if (seenN.has(k)) continue; seenN.add(k);
     const it = { t: e.Name, x: +(+e.PosX).toFixed(3), z: +(+e.PosZ).toFixed(3), a: (e.areas || []).filter(Boolean) };
-    if (npcName[e.Name]) it.n = npcName[e.Name];
+    if (nm) it.n = nm;
     npc.push(it);
   }
   console.log("  NPC", npc.length, "（有名称", npc.filter((n) => n.n).length, "）");

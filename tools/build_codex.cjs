@@ -319,6 +319,9 @@ function main() {
   // 个别手工修正（中文数据缺失/不准确时覆盖）
   const SOURCE_FIX = {
     幽界连结装置: "完成挑战战斗「艾尔玛再临」后，在挑战之地从诺彭大仙人处获得。",
+    核心晶片: "可在古拉·托里格镇·托里格商店街的情报商加布加布处购买。",
+    传承的核心水晶: "在古拉·托里格镇的玛吉杂货店，从店主萨雷斯处购买。",
+    幸运的核心水晶: "第 4 章后，在汉扎格荒野的打捞点打捞，击败随之出现的[[敌人:大胃王尖角龙鱼|大胃王尖角龙鱼]]后获得（前置：先获得「要小心大胃王尖角龙鱼」情报，可与格尔特蒙特出发港的拉塞尔莱塞利对话，或从各地情报商购买）。[[外链:特殊事件/重音的核心水晶|查看 wiki 流程]]",
   };
   const manualAcq = {};
   for (const r of rows2(`SELECT l.item_entity_id AS id, l.acquisition_text AS txt
@@ -337,7 +340,7 @@ function main() {
   for (const e of rows(`SELECT id, name_zh, name_en FROM entity WHERE name_zh IS NOT NULL AND name_zh <> ''`)) nameOfId[e.id] = e.name_zh;
   for (const r of rows2(`SELECT r.item_name AS item, e.name_zh AS quest FROM quest_reward r
       LEFT JOIN entity e ON e.id = r.quest_id`)) {
-    if (r.quest) addHint(r.item, "完成任务「" + r.quest + "」");
+    if (r.quest) addHint(r.item, "完成任务[[任务:" + r.quest + "|" + r.quest + "]]");
   }
   for (const r of rows2(`SELECT d.item_title AS item, e.name_zh AS enemy FROM enemy_drop d
       LEFT JOIN enemy en ON en.entity_id = d.enemy_id LEFT JOIN entity e ON e.id = en.entity_id

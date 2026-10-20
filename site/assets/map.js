@@ -428,7 +428,7 @@
       '<div class="map-legend"><span><i class="lg-main"></i>主线地图</span><span><i class="lg-side"></i>本章支线所在地图</span></div>' +
       '<div class="map-filters">' +
         '<div class="map-types"></div>' +
-        '<input class="map-search" type="search" placeholder="筛选标记点 / 搜道具、NPC…">' +
+        '<input class="map-search" type="search" placeholder="全图搜索：道具、NPC、敌人、任务、区域…">' +
         '<button class="chip map-done-toggle" type="button" aria-pressed="false">隐藏已完成</button>' +
       "</div>" +
       '<div class="map-hits" hidden></div>' +
@@ -692,7 +692,8 @@
         if (!state.types[t]) return;
         var pts = (m[t] || []).filter(function (p) {
           // 任务接取点默认只显示本章解锁的（避免每张图都堆满几章后的任务）
-          if (t === "quest" && !state.questAll && p.c && p.c !== state.chap) return false;
+          // 深链定位（focusMarker）时会临时放开「只显示本章任务」：目标任务可能是后面的章节才解锁的
+          if (t === "quest" && !state.questAll && !state.noCluster && p.c && p.c !== state.chap) return false;
           // 「隐藏已完成」：把打过勾的宝箱 / 任务点滤掉
           if (state.hideDone && TYPE_META[t].done && isDone(m.id, t, p)) return false;
           if (!key) return true;
@@ -841,44 +842,87 @@
 
     /* 搜索框：
        - 先按名字筛当前地图的标记点（原有行为）
-       - 若输入命中了「可采集道具 / NPC / 任务」索引，则在下方列出所有可跳转的位置 */
+       - 全局检索：NPC / 敌人 / 道具 / 任务接取点 / 地图名，不限于本章；结果里标出所在章节，
+         点条目可跨章节跳过去（侧边地图里原地切章节，不离开当前页面） */
     function renderHits() {
       var kw = (search.value || "").trim();
       hitsBox.innerHTML = "";
       if (kw.length < 1) { hitsBox.hidden = true; return; }
-      var items = Object.keys(MD.itemIndex || {}).filter(function (n) { return n.indexOf(kw) > -1; }).slice(0, 12);
-      var npcs = Object.keys(MD.npcIndex || {}).filter(function (n) { return n.indexOf(kw) > -1; }).slice(0, 12);
-      var enemies = Object.keys(MD.enemyIndex || {}).filter(function (n) { return n.indexOf(kw) > -1; }).slice(0, 12);
-      var quests = Object.keys(MD.questIndex || {}).filter(function (n) { return n.indexOf(kw) > -1; }).slice(0, 12);
-      if (!items.length && !npcs.length && !enemies.length && !quests.length) { hitsBox.hidden = true; return; }
-      var h = [];
-      var locBtn = function (kind, name, label, sub) {
-        return '<button type="button" class="hit" data-hk="' + kind + '" data-hn="' + esc(name) + '">' +
-          '<span class="hit-n">' + esc(label) + '</span>' + (sub ? '<span class="hit-s">' + esc(sub) + "</span>" : "") + "</button>";
+      var lim = function (arr) { return arr.slice(0, 10); };
+      var f = function (n) { return n.indexOf(kw) > -1; };
+      var items = lim(Object.keys(MD.itemIndex || {}).filter(f));
+      var npcs = lim(Object.keys(MD.npcIndex || {}).filter(f));
+      var enemies = lim(Object.keys(MD.enemyIndex || {}).filter(f));
+      var quests = lim(Object.keys(MD.questIndex || {}).filter(f));
+      var mapNames = lim(Object.keys(AREA_MAPS).filter(function (a) {
+        if (f(a)) return true;
+        return (AREA_MAPS[a] || []).some(function (id) { return MAPS[id] && (MAPS[id].group || "").indexOf(kw) > -1; });
+      }));
+      if (!items.length && !npcs.length && !enemies.length && !quests.length && !mapNames.length) {
+        hitsBox.hidden = true;
+        return;
+      }
+      // 该名字在哪些章节/区域能找到（用于「所有位置」的副标题）
+      var where = function (kind, name) {
+        var ts = locateTargets(kind, name);
+        if (!ts.length) return "";
+        var areas = [];
+        ts.forEach(function (t) {
+          var a = (MAPS[t.m] || {}).area || "";
+          if (a && areas.indexOf(a) === -1) areas.push(a);
+        });
+        return areas.slice(0, 2).join("、") + (areas.length > 2 ? " 等 " + areas.length + " 个区域" : "") +
+          (ts.length > 1 ? " · " + ts.length + " 处" : "");
       };
+      var h = [];
+      var locBtn = function (kind, name, label, sub, extra) {
+        return '<button type="button" class="hit" data-hk="' + kind + '" data-hn="' + esc(name) + '">' +
+          '<span class="hit-n">' + esc(label) + '</span>' + (sub ? '<span class="hit-s">' + esc(sub) + "</span>" : "") +
+          (extra || "") + "</button>";
+      };
+      if (mapNames.length) {
+        h.push('<div class="hits-g"><h5>地图 / 区域</h5>' + mapNames.map(function (a) {
+          return locBtn("area", a, a, (AREA_MAPS[a] || []).length + " 张图");
+        }).join("") + "</div>");
+      }
       if (quests.length) {
         h.push('<div class="hits-g"><h5>任务接取点</h5>' + quests.map(function (n) {
-          var maps = (MD.questIndex || {})[n] || [];
-          return locBtn("quest", n, n, maps.join(" / "));
+          return locBtn("quest", n, n, where("quest", n));
         }).join("") + "</div>");
       }
       if (npcs.length) {
         h.push('<div class="hits-g"><h5>NPC</h5>' + npcs.map(function (n) {
-          return locBtn("npc", n, n, ((MD.npcIndex || {})[n] || []).length + " 处");
+          return locBtn("npc", n, n, where("npc", n));
         }).join("") + "</div>");
       }
       if (enemies.length) {
         h.push('<div class="hits-g"><h5>敌人</h5>' + enemies.map(function (n) {
-          return locBtn("enemy", n, n, ((MD.enemyIndex || {})[n] || []).length + " 处");
+          return locBtn("enemy", n, n, where("enemy", n));
         }).join("") + "</div>");
       }
       if (items.length) {
         h.push('<div class="hits-g"><h5>道具获取点</h5>' + items.map(function (n) {
-          return locBtn("item", n, n, ((MD.itemIndex || {})[n] || []).length + " 处");
+          return locBtn("item", n, n, where("item", n));
         }).join("") + "</div>");
       }
       hitsBox.innerHTML = h.join("");
       hitsBox.hidden = false;
+    }
+
+    /* 跨章节定位：在当前地图卡片里原地切到目标章节的地图并聚焦（不跳页面） */
+    function focusAnywhere(kind, name, idx) {
+      var targets = locateTargets(kind, name);
+      if (!targets.length) return false;
+      var t = targets[idx || 0];
+      var hint = kind === "npc" ? "NPC：" + name
+        : kind === "enemy" ? "敌人：" + name
+        : kind === "quest" ? "任务接取点：" + name
+        : name + "（" + t.label + "）";
+      var dockCard = document.getElementById("mapDock").contains(box);
+      if (dockCard && window.X2App && window.X2App.openDock) {
+        return window.X2Map.focusInDock(kind, name, hint) !== null;
+      }
+      return gotoAndFocus(t.c, t.m, t.k, matcherFor(t.k, name, t.key), hint);
     }
 
     hitsBox.addEventListener("click", function (e) {
@@ -889,17 +933,28 @@
       search.value = "";
       state.key = "";
       drawMarkers();
+      if (kind === "area") {
+        // 区域：切到该区域第一张图
+        var ids = areaMaps(name);
+        if (!ids.length) return;
+        var ch = pickChapter(ids[0]);
+        if (ch && ch !== chapter && window.X2App && box.closest("#mapDock")) window.X2App.openDock(ch);
+        state.id = ids[0];
+        remember();
+        renderAreas(); renderMaps(); showMap();
+        return;
+      }
       if (kind === "quest") {
         var targets = locateTargets("quest", name);
-        if (targets.length === 1) { focusMapTarget("quest", name, 0); return; }
+        if (targets.length === 1) { focusAnywhere("quest", name, 0); return; }
         if (!targets.length) return;
         openPicker(name, targets);
         return;
       }
-      var targets = locateTargets(kind, name);
-      if (targets.length === 1) { focusMapTarget(kind, name, 0); return; }
-      if (!targets.length) return;
-      openPicker(name, targets);
+      var targets2 = locateTargets(kind, name);
+      if (targets2.length === 1) { focusAnywhere(kind, name, 0); return; }
+      if (!targets2.length) return;
+      openPicker(name, targets2);
     });
 
     search.addEventListener("input", function () {
@@ -1239,7 +1294,8 @@
     if (!already) location.hash = "#/story/" + chapterId;
     var tries = 0;
     (function attempt() {
-      var card = document.getElementById("mapcard-" + chapterId);
+      // 优先当前页面里的地图卡片（侧边地图里可能有同 id 的一份）
+      var card = document.querySelector('.mapcard[id="mapcard-' + chapterId + '"]:not(#mapDock .mapcard)') || document.querySelector('#mapDock .mapcard[id="mapcard-' + chapterId + '"]');
       if (card && card._focusMarker) {
         if (card._focusMarker(mapId, layer, match, hint)) {
           try { card.scrollIntoView({ block: "center", behavior: already ? "smooth" : "auto" }); } catch (e) {}
@@ -1260,17 +1316,24 @@
     var label = hint || (kind === "enemy" ? "敌人：" + name : "NPC：" + name);
     var tries = 0;
     (function attempt() {
-      var card = document.getElementById("mapcard-" + t.c);
-      if (card && card._focusMarker && card.closest("#mapDock")) {
+      // 只认「正在侧边地图里、且章节正确」的卡片；章节不对就先把侧边地图切过去
+      // 章节页里也有同 id 的地图卡片，必须只在侧边地图里找
+      var card = document.querySelector('#mapDock .mapcard[id="mapcard-' + t.c + '"]');
+      if (card && card._focusMarker && document.getElementById("mapDock").contains(card)) {
         card._focusMarker(t.m, t.k, matcherFor(t.k, name, t.key), label);
         try { card.scrollIntoView({ block: "nearest", behavior: "smooth" }); } catch (e) {}
         return;
       }
-      // 侧边地图还没打开、或当前显示的不是这张地图：让它切到目标章节
-      if (window.X2App && window.X2App.openDock) window.X2App.openDock(t.c);
+      if (window.X2App && window.X2App.openDock && dockChapterIdOf() !== t.c) window.X2App.openDock(t.c);
       if (++tries < 30) setTimeout(attempt, 80);
     })();
     return t;
+  }
+  /* 侧边地图当前渲染的章节（按 dock 里的卡片 id 判断） */
+  function dockChapterIdOf() {
+    var card = document.querySelector("#mapDock .mapcard");
+    var m = card && /^mapcard-(.+)$/.exec(card.id || "");
+    return m ? m[1] : null;
   }
 
   window.X2Map = {
