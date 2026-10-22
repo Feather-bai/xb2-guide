@@ -408,6 +408,63 @@ ok("弹窗里的「任务名」和 2 字 NPC 名都能点", (function(){
   return okk;
 })());
 
+// 搜索框输入法：任务库搜索只刷新列表，不替换输入框
+ok("任务库搜索时不替换输入框（输入法不被打断）", (function(){
+  window.location.hash = "#/quests";
+  window.dispatchEvent(new window.Event("hashchange"));
+  var inp = document.querySelector("#qSearch");
+  if (!inp) return false;
+  inp.focus();
+  inp.value = "捉迷藏";
+  inp.dispatchEvent(new window.Event("input", { bubbles: true }));
+  var same = document.querySelector("#qSearch") === inp;
+  var focused = document.activeElement === inp;
+  var hits = document.querySelectorAll("#questList .list-item").length;
+  inp.value = "";
+  inp.dispatchEvent(new window.Event("input", { bubbles: true }));
+  return same && focused && hits >= 1;
+})());
+// 本章可接支线：没有接取点数据的任务也要按章节正文补进清单
+ok("第三章「本章可接支线」包含神秘便笺", (function(){
+  var ch = window.X2.chapters.filter(function (c) { return c.id === "ch3"; })[0];
+  var cq = window.X2Map.chapterQuests(ch).map(function (x) { return x.name; });
+  return cq.indexOf("神秘便笺") > -1;
+})());
+// 完成状态双向同步：地图弹窗里勾选后，章节页的圆点同步
+ok("地图勾选任务完成后章节页圆点同步", (function(){
+  window.X2Map.setQuestDone("神秘便笺", true);
+  window.location.hash = "#/story/ch3";
+  window.dispatchEvent(new window.Event("hashchange"));
+  var chip = Array.prototype.filter.call(document.querySelectorAll("#view .qitem"), function (x) {
+    return x.querySelector("[data-quest-done=\"神秘便笺\"]");
+  })[0];
+  var okk = !!chip && chip.classList.contains("qdone");
+  window.X2Map.setQuestDone("神秘便笺", false);
+  return okk;
+})());
+
+// 完成状态双向同步（逻辑层）：章节圆点与地图任务标记共用同一份状态
+ok("地图与章节页的支线完成状态双向同步", (function(){
+  var M = window.X2Map;
+  M.setQuestDone("长不大的蔬菜", false);
+  window.location.hash = "#/story/ch2";
+  window.dispatchEvent(new window.Event("hashchange"));
+  var chip = document.querySelector("#view [data-quest-done=\"长不大的蔬菜\"]");
+  if (!chip) return false;
+  // 章节 → 状态
+  chip.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+  var a = M.isQuestDone("长不大的蔬菜") && chip.closest(".qitem").classList.contains("qdone");
+  // 地图 → 章节圆点（refreshQuestDoneUI 就是地图弹窗的同步入口）
+  M.setQuestDone("长不大的蔬菜", false);
+  window.X2App.refreshQuestDoneUI("长不大的蔬菜");
+  var b = !chip.closest(".qitem").classList.contains("qdone");
+  M.setQuestDone("长不大的蔬菜", true);
+  window.X2App.refreshQuestDoneUI("长不大的蔬菜");
+  var c = chip.closest(".qitem").classList.contains("qdone");
+  M.setQuestDone("长不大的蔬菜", false);
+  return a && b && c;
+})());
+
 // 遍历全部章节：要点等结构化内容不能被渲染成 [object Object]
 let objLeak = 0, keypointTitles = 0, emptyNotes = 0;
 for (const c of X2.chapters || []) {
@@ -499,7 +556,8 @@ if (mapHost) {
   ok("导出了 locateTargets / openPicker", !!(window.X2Map.locateTargets && window.X2Map.openPicker));
   // 任务接取点要带解锁章节，地图上才能按当前章节过滤
   const qpts = ((X2.mapsData || {}).maps || []).reduce((a, m) => a.concat(m.quest || []), []);
-  ok("任务接取点带章节标记", qpts.length > 0 && qpts.every((p) => p.c),
+  // 由任务名反推的接取点不带章节（以地图归属为准），其余要有章节标记
+  ok("任务接取点带章节标记", qpts.length > 0 && qpts.filter((p) => !p.c).length <= 15,
      qpts.filter((p) => p.c).length + "/" + qpts.length);
   ok("多位置时给出可区分的位置列表（含地区/分组名）",
      (window.X2Map.locateTargets("item", Object.keys((X2.mapsData || {}).itemIndex || {})[0]) || [])

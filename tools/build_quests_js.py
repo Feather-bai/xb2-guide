@@ -215,6 +215,8 @@ def build_quest(name, title, body, pr=None, cat="普通任务", extra=None):
     if not re.fullmatch(r"[A-Za-z]{1,3}-?\d{1,3}", qid):
         qid = ""
     q = {
+        // wiki 页面标题偶尔带 SMW 的「# QUERY…」尾缀，别让它进任务名
+        "name": re.sub(r"s*#s*QUERYw*$", "", name).strip(),
         "id": qid or name,
         "name": name,
         "cat": first("任务分类") or cat,

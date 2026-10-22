@@ -319,6 +319,37 @@
         out.push({ name: cn, parent: it.name, map: it.map, place: (cq.place || []).join("・"), cat: cq.cat || "", blade: cq.blade || "", cond: cq.cond || "", kids: [] });
       });
     });
+    // 2b) 章节清单里有、但本图没有接取点数据的支线（没有 NPC 发布点 / 没有地图标记）：
+    //     按章节清单归到本章（例：神秘便笺在塞着贵重品的箱子里触发；安稳是结的异刃任务）。
+    //     只要**本章地图里没有已归到本章的接取点**就补——APK 的 available_chapter 有时比实际晚一章。
+    var hasPoint3 = {};
+    (chapterMapInfo(chapter).ids || []).forEach(function (mid) {
+      ((MAPS[mid] || {}).quest || []).forEach(function (p) { if (p.c === chapter.id) hasPoint3[p.t] = 1; });
+    });
+    (chapter.quests || []).forEach(function (n) {
+      if (seen[n] || hasPoint3[n]) return;
+      var q = qByName[n];
+      if (!isSide(q)) return;
+      seen[n] = 1;
+      out.push({ name: n, parent: parentQuest(q), map: "", place: (q.place || []).join("・"), cat: q.cat || "", blade: q.blade || "", cond: q.cond || "", kids: [] });
+    });
+    // 3) 章节正文里明确写了「支线解锁／推荐先接」、但 wiki 没有接取点数据的任务
+    //    （例：神秘便笺是在地图上捡到贵重品后触发，没有 NPC 发布点），补进本章清单，避免整条漏掉。
+    //    只补「全站都没有接取点」的任务——有接取点的按地图数据归章，不能因为正文提了一嘴就重复/错章。
+    var mentioned = questsMentionedInChapter(chapter);
+    // 全站是否已有该任务的接取点（有就不走正文兜底，按地图数据归章）
+    var hasPoint = {};
+    forEachQuestPoint(function (mapId, cid, qname) { hasPoint[qname] = 1; });
+    mentioned.forEach(function (n) {
+      if (seen[n] || hasPoint[n]) return;
+      var q = qByName[n];
+      if (!isSide(q)) return;
+      seen[n] = 1;
+      out.push({
+        name: n, parent: parentQuest(q), map: "", place: (q.place || []).join("・"), cat: q.cat || "",
+        blade: q.blade || "", cond: q.cond || "", kids: [],
+      });
+    });
     // 顺序：父任务在前，它的子任务紧随其后
     var ordered = [];
     var done = {};
@@ -333,6 +364,33 @@
     });
     out.forEach(function (it) { if (!done[it.name]) { done[it.name] = 1; ordered.push(it); } });
     return ordered;
+  }
+
+  /* 章节正文里点名的支线（「支线解锁：「XX」」「推荐先接「XX」」这类）。
+     只认**章节清单以外的正文**——清单本身缺条目时不能拿它当证据；
+     且必须在地图/章节数据里确实没有接取点（有接取点的会走上面的地图分支）。 */
+  function questsMentionedInChapter(ch) {
+    var qByName = {};
+    (window.X2.quests || []).forEach(function (q) { qByName[q.name] = q; });
+    var parts = [];
+    if (ch.summary) parts.push(ch.summary);
+    (ch.keypoints || []).forEach(function (k) { parts.push(typeof k === "string" ? k : (k.title || "") + " " + (k.text || "")); });
+    (ch.steps || []).forEach(function (s) {
+      parts.push(s.title || "");
+      if (s.body) parts.push(s.body);
+      (s.notes || []).forEach(function (n) { parts.push((n.title || "") + " " + (n.text || "")); });
+    });
+    var text = parts.join(" ");
+    var found = [];
+    var re = /(?:支线解锁|支线|推荐先接|可接)[^「]{0,12}「([^」]{2,24})」/g;
+    var m;
+    // 正文里常写成「[[任务:神秘便笺]]」，先剥掉 wiki 链接外壳再匹配名字
+    var link = /\[\[(?:任务:)?([^\]|]+)(?:\|([^\]]+))?\]\]/g;
+    while ((m = re.exec(text))) {
+      var n = m[1].replace(link, function (_, t, l) { return l || t; });
+      if (qByName[n] && found.indexOf(n) === -1) found.push(n);
+    }
+    return found;
   }
 
   /* 套娃支线关系：父任务名 -> [子任务名] */
@@ -355,6 +413,7 @@
   /* 遍历所有任务接取点（来自 mapsData.quest[]） */
   function forEachQuestPoint(fn) {
     (MD.maps || []).forEach(function (m) {
+      // 由任务名反推的接取点（p.guessed）没有可靠章节，不写 p.c，按地图所属章节展示
       (m.quest || []).forEach(function (p) { if (p.c) fn(m.id, p.c, p.t); });
     });
   }
@@ -987,8 +1046,8 @@
       var layer = b.getAttribute("data-done");
       var pt = b._x2pt, mk = b._x2mk;
       if (!pt) return;
-      setDone(state.id, layer, pt, !isDone(state.id, layer, pt));
-      drawMarkers();
+      if (box._markDone) box._markDone(layer, pt, !isDone(state.id, layer, pt));
+      else setDone(state.id, layer, pt, !isDone(state.id, layer, pt));
       var np = (MAPS[state.id][layer] || []).filter(function (p) { return p.x === pt.x && p.z === pt.z; })[0];
       if (np && np._mk) np._mk.openPopup();
     });
@@ -1085,6 +1144,13 @@
     box._showMap = showMap;
     // 外部改了完成状态后只需重画标记，不必重建整张卡片
     box._redoMarkers = function () { try { drawMarkers(); } catch (e) {} };
+    // 地图弹窗里切换完成状态：写状态 → 重画标记 → 通知页面上的「本章可接支线」圆点
+    box._markDone = function (layer, pt, on) {
+      setDone(state.id, layer, pt, on);
+      drawMarkers();
+      if (window.X2App && window.X2App.refreshQuestDoneUI) window.X2App.refreshQuestDoneUI(pt && pt.t);
+      return on;
+    };
     renderAreas();
     renderMaps();
     // 初始地图：章节地点列表里的区域优先（越靠前权重越高），其次按标记点数量

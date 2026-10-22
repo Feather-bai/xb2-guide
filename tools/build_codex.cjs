@@ -340,7 +340,9 @@ function main() {
   for (const e of rows(`SELECT id, name_zh, name_en FROM entity WHERE name_zh IS NOT NULL AND name_zh <> ''`)) nameOfId[e.id] = e.name_zh;
   for (const r of rows2(`SELECT r.item_name AS item, e.name_zh AS quest FROM quest_reward r
       LEFT JOIN entity e ON e.id = r.quest_id`)) {
-    if (r.quest) addHint(r.item, "完成任务[[任务:" + r.quest + "|" + r.quest + "]]");
+    // 任务名来自 wiki 页面标题时可能带 SMW 的「# QUERY…」尾缀，展示前去掉
+    var cleanQ = function (n) { return String(n || "").replace(/#s*QUERYw*$/i, "").trim(); };
+    if (r.quest) addHint(r.item, "完成任务[[任务:" + cleanQ(r.quest) + "|" + cleanQ(r.quest) + "]]");
   }
   for (const r of rows2(`SELECT d.item_title AS item, e.name_zh AS enemy FROM enemy_drop d
       LEFT JOIN enemy en ON en.entity_id = d.enemy_id LEFT JOIN entity e ON e.id = en.entity_id

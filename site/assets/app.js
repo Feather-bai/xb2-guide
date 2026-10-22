@@ -535,10 +535,8 @@
   }
   function isBladeQuest(q) { return q && q.cat === "异刃任务"; }
 
-  function viewQuests(params) {
-    if (params && params.q) questFilter.key = params.q;
-    var cats = ["全部", "主线任务", "支线任务", "异刃任务", "DLC任务"];
-    var list = (X2.quests || []).filter(function (q) {
+  function questListItems() {
+    return (X2.quests || []).filter(function (q) {
       if (questFilter.cat === "支线任务") { if (q.cat === "主线任务") return false; }
       else if (questFilter.cat !== "全部" && q.cat !== questFilter.cat) return false;
       if (questFilter.key) {
@@ -548,18 +546,10 @@
       }
       return true;
     });
-    var h = ['<section class="hero"><h1>任务库</h1><p>共 ' + (X2.quests || []).length +
-      ' 条任务。主线任务只出现在「主线任务」栏；异刃任务用紫色标出，解锁条件已补上「需先解锁对应异刃」。</p></section>'];
-    h.push('<div class="card tight"><div class="chiprow">' + cats.map(function (c) {
-      var n = c === "全部" ? (X2.quests || []).length
-        : c === "支线任务" ? (X2.quests || []).filter(function (q) { return q.cat !== "主线任务"; }).length
-        : (X2.quests || []).filter(function (q) { return q.cat === c; }).length;
-      return '<button class="chip' + (questFilter.cat === c ? " blue" : "") + '" type="button" data-qcat="' + esc(c) + '">' +
-        esc(c) + " " + n + "</button>";
-    }).join("") + "</div>" +
-      '<div style="margin-top:9px"><input id="qSearch" type="search" placeholder="按名称 / 条件 / 地点 / 异刃筛选…" value="' + esc(questFilter.key) + '" style="width:100%;background:var(--card-2);border:1px solid var(--line);border-radius:9px;padding:9px 12px;color:var(--fg);font-size:15px"></div></div>');
-
-    h.push('<div class="list">');
+  }
+  function questListHTML() {
+    var list = questListItems();
+    var h = ['<div class="list">'];
     list.slice(0, 400).forEach(function (q) {
       var blade = isBladeQuest(q);
       h.push('<button class="list-item' + (blade ? " is-blade" : "") + '" type="button" data-quest="' + esc(q.name) + '">' +
@@ -572,6 +562,26 @@
     });
     h.push("</div>");
     if (!list.length) h.push('<div class="empty">没有匹配的任务。</div>');
+    return h.join("");
+  }
+  function questCountHTML() { return "共 " + questListItems().length + " 条"; }
+
+  function viewQuests(params) {
+    if (params && params.q) questFilter.key = params.q;
+    var cats = ["全部", "主线任务", "支线任务", "异刃任务", "DLC任务"];
+    var h = ['<section class="hero"><h1>任务库</h1><p>共 ' + (X2.quests || []).length +
+      ' 条任务。主线任务只出现在「主线任务」栏；异刃任务用紫色标出，解锁条件已补上「需先解锁对应异刃」。</p></section>'];
+    h.push('<div class="card tight"><div class="chiprow">' + cats.map(function (c) {
+      var n = c === "全部" ? (X2.quests || []).length
+        : c === "支线任务" ? (X2.quests || []).filter(function (q) { return q.cat !== "主线任务"; }).length
+        : (X2.quests || []).filter(function (q) { return q.cat === c; }).length;
+      return '<button class="chip' + (questFilter.cat === c ? " blue" : "") + '" type="button" data-qcat="' + esc(c) + '">' +
+        esc(c) + " " + n + "</button>";
+    }).join("") + "</div>" +
+      '<div style="margin-top:9px"><input id="qSearch" type="search" placeholder="按名称 / 条件 / 地点 / 异刃筛选…" value="' + esc(questFilter.key) + '" style="width:100%;background:var(--card-2);border:1px solid var(--line);border-radius:9px;padding:9px 12px;color:var(--fg);font-size:15px"></div></div>');
+
+    // 列表单独包一层：搜索时只刷新计数与列表，不替换输入框（否则中文输入法组词会被打断）
+    h.push('<div class="codex-count" id="qCount">' + questCountHTML() + '</div><div id="questList">' + questListHTML() + "</div>");
     return h.join("");
   }
 
@@ -1153,19 +1163,29 @@
       var qn = qd.getAttribute("data-quest-done");
       var M = window.X2Map;
       if (M && M.setQuestDone) {
-        M.setQuestDone(qn, !M.isQuestDone(qn));
+        var on = !M.isQuestDone(qn);
+        M.setQuestDone(qn, on);
         modalDirty = true;
-        // 浮窗开着时原地更新按钮，不闪一下重开
+        // 章节里「本章可接支线」的圆点与地图上的任务接取点共用同一个完成状态：
+        // 就地同步所有显示同一条任务的圆点，并刷新所有地图卡片，另一边立即跟着变
+        $$("[data-quest-done=\"" + qn.replace(/"/g, '\\"') + "\"]").forEach(function (b) {
+          b.classList.toggle("done", on);
+          b.textContent = on ? "✓ 已完成" : "标记为已完成";
+          b.setAttribute("aria-pressed", String(on));
+          var chip = b.closest(".qitem");
+          if (chip) chip.classList.toggle("qdone", on);
+        });
         if (qd.classList.contains("qdone-modal")) {
-          var on = M.isQuestDone(qn);
           qd.classList.toggle("done", on);
           qd.textContent = on ? "✓ 已完成（点击撤销）" : "标记为已完成";
-        } else {
           render();
         }
-        // 地图上的任务接取点共用同一状态
-        var card = document.querySelector(".mapcard");
-        if (card && card._redoMarkers) { try { card._redoMarkers(); } catch (err) {} }
+        $$(".mapcard").forEach(function (card) {
+          if (card._redoMarkers) { try { card._redoMarkers(); } catch (err) {} }
+        });
+        // 顺手把侧边地图里同任务的标记点也刷新（若正显示该图）
+        var dockCard = document.querySelector("#mapDock .mapcard");
+        if (dockCard && dockCard._redoMarkers) { try { dockCard._redoMarkers(); } catch (err) {} }
       }
       return;
     }
@@ -1226,10 +1246,11 @@
   document.addEventListener("input", function (e) {
     if (e.target.id === "qSearch") {
       questFilter.key = e.target.value;
-      var pos = e.target.selectionStart;
-      render();
-      var n = $("#qSearch");
-      if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch (err) {} }
+      // 只刷新计数与列表，不整页重绘：重绘会替换掉正在输入的输入框，中文输入法的组词框会跟着消失
+      var ql = $("#questList");
+      if (ql) ql.innerHTML = questListHTML();
+      var qcEl = $("#qCount");
+      if (qcEl) qcEl.textContent = questCountHTML();
     }
     if (e.target.id === "codexSearch") {
       var cat = currentCodexCat();
@@ -1412,5 +1433,25 @@
   /* ------------------------------------------------------------ 启动 */
   buildNav();
   render();
-  window.X2App = { openModal: openModal, closeModal: closeModal, showQuest: showQuest, render: render, openDock: function (chapterId) { setDock(true, chapterId); } };
+  /* 地图弹窗里勾选任务完成状态后，同步页面上的「本章可接支线」圆点（不整页重绘） */
+  function refreshQuestDoneUI(questName) {
+    if (!questName || !window.X2Map || !window.X2Map.isQuestDone) return;
+    var on = window.X2Map.isQuestDone(questName);
+    $$("[data-quest-done]").forEach(function (b) {
+      if (b.getAttribute("data-quest-done") !== questName) return;
+      b.classList.toggle("done", on);
+      if (b.classList.contains("qdone-modal")) b.textContent = on ? "✓ 已完成（点击撤销）" : "标记为已完成";
+      else b.setAttribute("aria-pressed", String(on));
+      var chip = b.closest(".qitem");
+      if (chip) chip.classList.toggle("qdone", on);
+    });
+    // 任务库 / 章节列表里其它显示同一任务的地方，也保持同步
+    $$(".mapcard").forEach(function (card) {
+      if (card !== document.querySelector("#mapDock .mapcard") && card._redoMarkers) {
+        try { card._redoMarkers(); } catch (e) {}
+      }
+    });
+  }
+
+  window.X2App = { openModal: openModal, closeModal: closeModal, showQuest: showQuest, render: render, openDock: function (chapterId) { setDock(true, chapterId); }, refreshQuestDoneUI: refreshQuestDoneUI };
 })();
